@@ -1,0 +1,38 @@
+<?php
+declare(strict_types=1);
+$config=tempnam(sys_get_temp_dir(),'yuganth-test-');
+file_put_contents($config,"<?php return ['dsn'=>'sqlite::memory:','checkout_enabled'=>true,'catalog_verified'=>true,'payment_driver'=>'manual_test','serviceable_pincodes'=>['530028']];");
+putenv('YUGANTH_CONFIG_FILE='.$config);register_shutdown_function(fn()=>unlink($config));
+require dirname(__DIR__).'/app/bootstrap.php';require dirname(__DIR__).'/app/Database.php';
+use function Yuganth\{query,one,rows,uid,now,migrate,seed,calculate,normalizeLines,createOrder,getOrder,cancelOrder,confirmPayment,fulfillOrder};
+use Yuganth\ApiError;
+$checks=0;
+function check(bool $v,string $label):void{global $checks;if(!$v)throw new RuntimeException($label);$checks++;}
+function rejects(callable $f,int $code,string $label):void{try{$f();}catch(ApiError $e){check($e->status===$code,$label.' status');return;}throw new RuntimeException($label.' did not reject');}
+migrate();seed();seed();check(count(rows('SELECT * FROM variants'))===16,'seeding is idempotent');
+$u=uid();query('INSERT INTO users (id,name,email,password_hash,created_at) VALUES (?,?,?,?,?)',[$u,'Tester','test@example.com',password_hash('long-test-password',PASSWORD_DEFAULT),now()]);
+query('UPDATE variants SET stock=10');
+$line=[['variant_id'=>'guntur-gold-100','quantity'=>2]];$address=['name'=>'Test Customer','phone'=>'9618423444','line1'=>'Test Address','city'=>'Visakhapatnam','state'=>'Andhra Pradesh','pincode'=>'530028'];
+query('INSERT INTO coupons (code,percent,minimum_paise,max_discount_paise,usage_limit,starts_at,ends_at,active) VALUES (?,?,?,?,?,?,?,?)',['TEST12',12,10000,1000,1,now()-10,now()+3600,1]);
+$quote=calculate(normalizeLines($line),'TEST12','530028');check($quote['subtotal_paise']===10800,'server price');check($quote['discount_paise']===1000,'discount cap');check($quote['total_paise']===15800,'shipping and total');
+rejects(fn()=>calculate(normalizeLines($line),'TEST12','000000'),422,'unserviceable postcode');
+rejects(fn()=>normalizeLines([['variant_id'=>'guntur-gold-100','quantity'=>-1]]),422,'negative quantity');
+rejects(fn()=>normalizeLines([['variant_id'=>'guntur-gold-100','quantity'=>1.5]]),422,'fraction quantity');
+rejects(fn()=>normalizeLines([['variant_id'=>'guntur-gold-100','quantity'=>99],['variant_id'=>'guntur-gold-100','quantity'=>1]]),422,'duplicate overflow');
+$input=['items'=>$line,'address'=>$address,'coupon'=>'TEST12','total_paise'=>1];$key=uid();$o=createOrder($u,$input,$key);
+check((int)$o['total_paise']===15800,'ignores client totals');check((int)one('SELECT stock FROM variants WHERE id=?',['guntur-gold-100'])['stock']===8,'reserves stock');
+check(createOrder($u,$input,$key)['id']===$o['id'],'idempotency same order');check((int)one('SELECT stock FROM variants WHERE id=?',['guntur-gold-100'])['stock']===8,'no double reservation');
+$changed=$input;$changed['items'][0]['quantity']=1;rejects(fn()=>createOrder($u,$changed,$key),409,'changed idempotency body');
+rejects(fn()=>createOrder($u,$input,uid()),422,'coupon usage exhausted');
+rejects(fn()=>getOrder($o['id'],'other-user'),404,'order ownership');
+rejects(fn()=>confirmPayment(['event_id'=>'test:wrong','order_id'=>$o['id'],'amount_paise'=>1,'currency'=>'INR']),409,'wrong captured amount');
+$event=['event_id'=>'test:captured','order_id'=>$o['id'],'amount_paise'=>15800,'currency'=>'INR'];
+check(confirmPayment($event)['status']==='processing','verified capture');check(confirmPayment($event)['status']==='processing','webhook duplicate');check(count(rows('SELECT * FROM outbox'))===1,'one notification');
+rejects(fn()=>cancelOrder($o['id'],$u),409,'paid order cannot be cancelled');
+rejects(fn()=>fulfillOrder($o['id'],'delivered','',$u),409,'cannot skip shipment');
+fulfillOrder($o['id'],'shipped','https://example.com/tracking',$u);fulfillOrder($o['id'],'delivered','',$u);check(getOrder($o['id'])['status']==='delivered','fulfilment transitions');
+$input['coupon']='';$two=createOrder($u,$input,uid());cancelOrder($two['id'],$u);cancelOrder($two['id'],$u);check((int)one('SELECT stock FROM variants WHERE id=?',['guntur-gold-100'])['stock']===8,'cancel restores only once');
+$exp=createOrder($u,$input,uid());query('UPDATE orders SET expires_at=? WHERE id=?',[now()-1,$exp['id']]);cancelOrder($exp['id'],'system',true);check(getOrder($exp['id'])['status']==='expired','expiration');
+rejects(fn()=>confirmPayment(['event_id'=>'test:late','order_id'=>$exp['id'],'amount_paise'=>(int)$exp['total_paise'],'currency'=>'INR']),409,'late capture requires reconciliation');
+$before=(int)one('SELECT stock FROM variants WHERE id=?',['guntur-gold-100'])['stock'];$bad=$input;$bad['items'][]=['variant_id'=>'araku-gold-100','quantity'=>99];rejects(fn()=>createOrder($u,$bad,uid()),409,'insufficient stock');check((int)one('SELECT stock FROM variants WHERE id=?',['guntur-gold-100'])['stock']===$before,'rollback stock');
+echo "PASS: $checks commerce assertions\n";

@@ -1,0 +1,36 @@
+# API reference
+
+Base: `api/index.php?route=PATH`. All responses are JSON. Same-origin session cookies; no cross-origin CORS access. Read `/session` for a CSRF token and send `X-CSRF-Token` on every POST except the payment provider webhook. POST bodies use `application/json`, maximum 64 KiB. Errors use `{ "error": "message" }` with 4xx/5xx status.
+
+| Route | Method | Purpose / body |
+|---|---|---|
+| `/session` | GET | User, CSRF token, checkout flag |
+| `/catalog` | GET | Active products, variant IDs, price_paise, available stock |
+| `/settings` | GET | Public banner and optional WhatsApp number |
+| `/auth/register` | POST | name, email, password (12–72 bytes); creates customer only |
+| `/auth/login` | POST | email, password; rotates session ID and CSRF |
+| `/auth/logout` | POST | Empty object; rotates CSRF |
+| `/auth/forgot` | POST | email; queues email transport message, uniform response |
+| `/auth/reset` | POST | token, password; one use, 30-minute expiry, invalidates other sessions |
+| `/addresses` | GET / POST | List own addresses / `{address}` / `{action:"delete",id}` |
+| `/cart/quote` | POST | items, coupon, pincode; computes server totals, checks delivery and stock |
+| `/orders` | GET / POST | Own latest 100 orders / items, coupon, address + `Idempotency-Key` header (16–100 safe characters) |
+| `/orders/ID` | GET | Own order detail; 404 for other customers |
+| `/orders/ID/cancel` | POST | Cancel own unpaid reservation; restore stock exactly once |
+| `/orders/ID/payment` | POST | Create/reuse configured provider checkout |
+| `/webhooks/payment` | POST | Raw provider request; requires configured adapter signature verification |
+| `/admin/variants` | GET | Administrator pack list |
+| `/admin/variant` | POST | id, price_paise, stock, active (0/1), expected_stock; prevents stale stock edits |
+| `/admin/coupons` | GET | Coupon rules and reserved/used count |
+| `/admin/coupon` | POST | code, percent, minimum_paise, max_discount_paise, usage_limit, starts_at, ends_at, active |
+| `/admin/banner` | POST | value, up to 300 bytes |
+| `/admin/orders` | GET | Latest 100 orders |
+| `/admin/order` | POST | id, status (cancelled/shipped/delivered), tracking_url (HTTPS for shipped) |
+
+`items`: `[{"variant_id":"guntur-gold-100","quantity":2}]`. Duplicate variant entries are aggregated; max 99 per variant, 50 input lines. Client prices and totals are ignored. Reusing an idempotency key with a different validated cart/address/coupon fails with 409.
+
+`address`: `{name,phone,line1,line2,city,state,pincode}`. All are strings; line2 is optional. Phone is a ten-digit Indian mobile number; postcode is six digits and must be configured as serviceable for checkout.
+
+Timestamps are Unix seconds in UTC. All money fields ending in `_paise` are integers. Database drivers may serialize numeric columns as strings, so clients should convert explicitly. The frontend shows INR.
+
+Order lifecycle: `pending_payment → processing → shipped → delivered`. Only a verified provider capture can enter `processing`. Unpaid orders may become `cancelled` or `expired`. Cancelling a paid order or refunding it requires the future provider refund flow; the generic admin does not silently refund money.

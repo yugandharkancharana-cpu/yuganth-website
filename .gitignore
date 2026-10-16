@@ -1,0 +1,13 @@
+/config/local.php
+/storage/
+/.env
+/.env.*
+!/.env.example
+/vendor/
+/node_modules/
+*.log
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+*.sqlite

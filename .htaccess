@@ -1,0 +1,2 @@
+# The application root must NEVER be your web document root. Only public/ is public.
+Require all denied
