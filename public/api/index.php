@@ -107,10 +107,19 @@ try {
         $u=user(true);
         if($method==='GET'&&$route==='/admin/orders')reply(['orders'=>rows('SELECT id,status,user_id,total_paise,created_at,tracking_url FROM orders ORDER BY created_at DESC LIMIT 100')]);
         if($method==='GET'&&$route==='/admin/coupons')reply(['coupons'=>rows('SELECT * FROM coupons ORDER BY code')]);
+        if($method==='GET'&&$route==='/admin/products')reply(['products'=>rows('SELECT * FROM products ORDER BY id')]);
+        if($method==='POST'&&$route==='/admin/product'){
+            $id=text($input['id']??null,40,'product');$name=text($input['name']??null,120,'name');$description=text($input['description']??null,2000,'description');$origin=text($input['origin']??'',120,'origin',0);
+            $category=$input['category']??'';$status=$input['launch_status']??'';$active=integer($input['active']??1,0,1,'active');
+            if(!in_array($category,['spices','seeds','nuts','flours'],true)||!in_array($status,['available','coming_soon'],true))throw new ApiError(422,'Invalid category or launch status.');
+            if($id==='pure-gold'&&$active)throw new ApiError(422,'Pure Gold is retired from this catalogue. Its records are retained for order history.');
+            transaction(function()use($id,$name,$description,$origin,$category,$status,$active,$u){if(!one('SELECT id FROM products WHERE id=?'.\Yuganth\lockSuffix(),[$id]))throw new ApiError(404,'Product not found.');query('UPDATE products SET name=?,description=?,origin=?,category=?,launch_status=?,active=? WHERE id=?',[$name,$description,$origin,$category,$status,$active,$id]);audit('product.updated',$id,$u['id']);});reply(['saved'=>true]);
+        }
         if($method==='GET'&&$route==='/admin/variants')reply(['variants'=>rows('SELECT v.*,p.name FROM variants v JOIN products p ON p.id=v.product_id ORDER BY v.id')]);
         if($method==='POST'&&$route==='/admin/variant'){
-            $id=text($input['id']??null,60,'variant');$price=integer($input['price_paise']??null,1,1000000,'price');$stock=integer($input['stock']??null,0,1000000,'stock');$active=integer($input['active']??1,0,1,'active');$expected=integer($input['expected_stock']??null,0,1000000,'previous stock');
-            transaction(function()use($id,$price,$stock,$active,$expected,$u){$old=one('SELECT id,stock FROM variants WHERE id=?'.\Yuganth\lockSuffix(),[$id]);if(!$old)throw new ApiError(404,'Variant not found.');if((int)$old['stock']!==$expected)throw new ApiError(409,'Stock changed since this page loaded. Refresh before saving.');query('UPDATE variants SET price_paise=?,stock=?,active=? WHERE id=?',[$price,$stock,$active,$id]);audit('variant.updated',$id,$u['id']);});reply(['saved'=>true]);
+            $id=text($input['id']??null,60,'variant');$price=integer($input['price_paise']??null,0,1000000,'price');$stock=integer($input['stock']??null,0,1000000,'stock');$active=integer($input['active']??1,0,1,'active');$expected=integer($input['expected_stock']??null,0,1000000,'previous stock');$confirmed=integer($input['price_confirmed']??0,0,1,'price confirmation');
+            if($confirmed&&$price<=0)throw new ApiError(422,'A confirmed price must be greater than zero.');
+            transaction(function()use($id,$price,$stock,$active,$expected,$confirmed,$u){$old=one('SELECT id,stock FROM variants WHERE id=?'.\Yuganth\lockSuffix(),[$id]);if(!$old)throw new ApiError(404,'Variant not found.');if((int)$old['stock']!==$expected)throw new ApiError(409,'Stock changed since this page loaded. Refresh before saving.');query('UPDATE variants SET price_paise=?,stock=?,active=?,price_confirmed=? WHERE id=?',[$price,$stock,$active,$confirmed,$id]);audit('variant.updated',$id,$u['id']);});reply(['saved'=>true]);
         }
         if($method==='POST'&&$route==='/admin/coupon'){
             $code=couponCode($input['code']??null);if($code==='')throw new ApiError(422,'Coupon required.');

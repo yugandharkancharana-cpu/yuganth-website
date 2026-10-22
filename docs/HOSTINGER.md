@@ -36,10 +36,10 @@ Do not upload `.git`, tests, private configuration, SQL dumps, runtime databases
 
 ## Database and configuration
 
-1. Create an empty MySQL database and a dedicated application database user through hPanel. Use only the necessary privileges; schema installation needs CREATE, while ordinary application operations need SELECT/INSERT/UPDATE/DELETE. InnoDB must be enabled.
+1. Create an empty MySQL database and a dedicated application database user through hPanel. Use only the necessary privileges; schema installation/upgrade needs CREATE and ALTER, while ordinary application operations need SELECT/INSERT/UPDATE/DELETE. InnoDB must be enabled.
 2. Copy `config/config.example.php` to private `config/local.php`. Set the actual DSN (`mysql:host=localhost;dbname=...;charset=utf8mb4`), DB username/password, canonical HTTPS base URL, and `environment=production` for the final production deployment. Keep checkout disabled initially.
 3. Run `php bin/console.php install` from the private application directory using Hostinger's PHP CLI path. If SSH is unavailable, import `database/schema.sql` via phpMyAdmin with InnoDB selected and ask the developer to run the seed/administrator commands through a temporary hosting cron job outside the web root. Do not expose an installation PHP page on the internet. Remove temporary setup jobs immediately.
-4. The install command does not overwrite existing seed records and seeds ZERO available stock. Confirm individual pack prices, approved images and stock, then adjust through `admin.html` after creating an admin with the CLI. Pure Gold has a placeholder image.
+4. For an existing installation, follow UPGRADE.md before running install. The one-time migration updates catalogue metadata, retires old items/sizes and requires price review while preserving customer/order history. Fresh packs start with zero stock and zero/unconfirmed prices. Set approved prices, confirm them and add stock through admin.html. The new catalogue uses six transparent cutout images. Pure Gold is retained only in historical database records.
 5. Configure the payment and notification adapters as described in INTEGRATIONS.md. Add serviceable postcodes as quoted strings; configure delivery charges and threshold in integer paise.
 6. Set `catalog_verified=true` only after checking real catalogue data; set `checkout_enabled=true` only after full staging acceptance. In production the payment driver must be `custom`. The example defaults are intentionally unable to accept paid orders.
 
@@ -74,3 +74,4 @@ Only after acceptance, take a fresh backup and arrange the document-root/cutover
 ## Remaining product work
 
 Payment/refund integration, notification transport and consent, tax invoices, courier automation, email verification/admin MFA, full product/media management, legal/SEO completion and migration remain developer launch work. The code provides the application core and interfaces, not preconfigured merchant services.
+

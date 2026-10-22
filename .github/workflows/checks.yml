@@ -16,6 +16,8 @@ jobs:
         run: find app bin config public/api tests -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Commerce rules
         run: php tests/commerce.php
+      - name: Database upgrade
+        run: php tests/migration.php
       - name: HTTP integration
         run: python3 tests/integration_http.py /usr/bin/php
       - name: JavaScript syntax

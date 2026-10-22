@@ -5,7 +5,7 @@ namespace Yuganth;
 function catalogue(): array
 {
     $products = rows('SELECT * FROM products WHERE active=1 ORDER BY id');
-    foreach ($products as &$p) $p['variants'] = rows('SELECT id,weight_g,price_paise,stock FROM variants WHERE product_id=? AND active=1 ORDER BY weight_g', [$p['id']]);
+    foreach ($products as &$p) $p['variants'] = rows('SELECT id,weight_g,price_paise,stock,price_confirmed FROM variants WHERE product_id=? AND active=1 ORDER BY weight_g', [$p['id']]);
     return $products;
 }
 function validateAddress(mixed $a): array
@@ -44,8 +44,8 @@ function calculate(array $normalized, string $code, string $pincode, bool $lock 
     $subtotal = 0; $lines = [];
     foreach ($normalized as $id => $q) {
         // Lock variants in deterministic order. Catalog edits use the same row locks.
-        $v = one('SELECT v.*,p.name,p.active AS product_active FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=?' . ($lock ? lockSuffix() : ''), [$id]);
-        if (!$v || !(int)$v['active'] || !(int)$v['product_active'] || (int)$v['stock'] < $q) throw new ApiError(409, 'A selected pack is unavailable or has insufficient stock.');
+        $v = one('SELECT v.*,p.name,p.active AS product_active,p.launch_status FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=?' . ($lock ? lockSuffix() : ''), [$id]);
+        if (!$v || !(int)$v['active'] || !(int)$v['product_active'] || $v['launch_status']!=='available' || !(int)$v['price_confirmed'] || (int)$v['price_paise']<=0 || (int)$v['stock'] < $q) throw new ApiError(409, 'A selected pack is unavailable, awaiting price confirmation or has insufficient stock.');
         $subtotal += (int)$v['price_paise'] * $q;
         $lines[] = ['variant_id'=>$id,'name'=>$v['name'],'weight_g'=>(int)$v['weight_g'],'quantity'=>$q,'unit_paise'=>(int)$v['price_paise']];
     }

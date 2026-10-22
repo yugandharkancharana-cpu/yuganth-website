@@ -4,11 +4,11 @@ Custom responsive storefront with a PHP commerce backend and a small store admin
 
 ## Included
 
-- Approved cream/red storefront, product category views, product carousel, mobile navigation and Our Story layout.
+- Approved forest-green/ivory storefront with six transparent product cutouts, category views, spotlight carousel, mobile navigation and Our Story.
 - PHP JSON API, MySQL/MariaDB deployment schema and SQLite local test support.
 - Registration, sign-in/out, password hashing, CSRF protection, idle session expiry, rate limiting, password reset via notification outbox, saved addresses and order history.
 - Server-authoritative prices, delivery checks, percentage coupons, transactional stock reservations, idempotent orders, expiry/cancellation, verified-payment state transition and fulfilment tracking.
-- Admin screens for existing variant prices/stock, percentage coupons, scrolling banner and shipment/delivery updates.
+- Admin screens for product descriptions/categories/visibility/launch status, confirmed variant prices, stock, percentage coupons, banner text and shipment/delivery updates.
 - Payment and email/WhatsApp provider interfaces; disabled by default. Optional WhatsApp click-to-chat link.
 - Automated business-rule and HTTP integration tests, plus a GitHub Actions check workflow.
 
@@ -16,11 +16,15 @@ Custom responsive storefront with a PHP commerce backend and a small store admin
 
 Choose and integrate the payment SDK, browser checkout, signature-verified capture webhook, provider mapping/reconciliation and refunds. Connect transactional email (required for password recovery) and WhatsApp Business with consent/templates if wanted. Confirm catalogue/pack prices/stock, legal content, delivery areas, tax/invoicing and courier requirements. Test the layout on real phones and test MySQL under concurrency on staging. Existing WordPress customers/orders are NOT migrated automatically.
 
-No customer data, database passwords, API keys or provider credentials are included. All seeded stock is zero and checkout is disabled until deliberately configured. Seed prices are illustrative and Pure Gold uses a temporary image.
+No customer data, database passwords, API keys or provider credentials are included. Fresh product prices start at zero/unconfirmed and stock starts at zero; checkout is disabled until deliberately configured. Chia Seeds, Peanuts and Ragi Flour start as coming soon. The separate Pure Gold SKU is retired without deleting historical records.
 
 ## Requirements
 
 PHP 8.3+ with PDO, PDO MySQL for Hostinger, or PDO SQLite for local tests. MySQL 8 / compatible MariaDB with InnoDB is the intended production database. Python 3 is used only for the HTTP test runner. No frontend build is needed.
+
+## Upgrading an existing installation
+
+Read [UPGRADE.md](docs/UPGRADE.md) first. Back up the database, retain private configuration and storage, then run the additive installer against the SAME database. Do not replace the existing database with a fresh one. The upgrade preserves users/orders and requires price review for the new packaging.
 
 ## Local setup
 
@@ -46,6 +50,7 @@ For a local checkout test, edit the private `config/local.php`: set `checkout_en
 
 ```sh
 php tests/commerce.php
+php tests/migration.php
 python3 tests/integration_http.py /absolute/path/to/php
 ```
 
@@ -71,7 +76,7 @@ docs/                    Deployment, API and provider handover
 
 Start with [Hostinger deployment](docs/HOSTINGER.md), then [provider integration](docs/INTEGRATIONS.md) and [API reference](docs/API.md).
 
-Brand colours remain editable in `public/assets/styles.css`. Banner wording is editable in the admin page. Coupon rules and banner text are separate, so an advertised offer must match a valid backend coupon.
+Brand colours remain editable in `public/assets/style.css`. Banner wording is editable in the admin page. Coupon rules and banner text are separate, so an advertised offer must match a valid backend coupon.
 
 ## Official references
 

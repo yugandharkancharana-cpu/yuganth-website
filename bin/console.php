@@ -8,7 +8,7 @@ $command=$argv[1]??'help';
 try{
     if($command==='install'){
         $storage=dirname(__DIR__).'/storage';if(!is_dir($storage))mkdir($storage,0700,true);
-        migrate();seed();echo "Schema installed; illustrative products seeded with ZERO stock. Verify all prices before enabling checkout.\n";
+        migrate();seed();echo "Schema installed; six-product catalogue ready with unconfirmed prices and ZERO stock for new packs. Review prices in admin before enabling checkout.\n";
     }elseif($command==='admin'){
         $email=strtolower(trim($argv[2]??''));if(!filter_var($email,FILTER_VALIDATE_EMAIL))throw new RuntimeException('Usage: php bin/console.php admin email@example.com');
         // Supply through environment/secure terminal, never as a command-line argument.

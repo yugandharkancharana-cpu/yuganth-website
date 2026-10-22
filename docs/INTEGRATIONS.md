@@ -35,7 +35,7 @@ Delivery uses a configured list of Indian postcodes, a flat shipping amount and 
 
 ## Products, coupons and permissions
 
-Admin UI: `admin.html` after signing in with an admin account created by the CLI. Customers cannot choose their role. An administrator can edit existing pack prices/stock, enable or disable pack variants, change the banner, manage percentage coupons, and move paid orders through shipment/delivery. Product creation, media uploads, tax configuration and customer-support tooling are future admin extensions.
+Admin UI: `admin.html` after signing in with an admin account created by the CLI. Customers cannot choose their role. An administrator can edit existing product names, descriptions, origins, categories, launch status and visibility, as well as pack prices/stock/price confirmation, banner text, percentage coupons and fulfilment. Brand-new product creation, media uploads, tax configuration and customer-support tooling remain future admin extensions.
 
 Prices are integer paise. Coupons support percent, minimum subtotal, maximum discount, dates, global usage limit and enabled state. Reservations consume coupon usage; cancellation/expiry releases it. Paid usage remains consumed. Per-customer/first-order restrictions and product exclusions are NOT implemented. Do not advertise FIRSTORDER eligibility until developers implement and test that rule. Seed data deliberately creates no promotional coupon.
 

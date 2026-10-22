@@ -104,8 +104,25 @@ with tempfile.TemporaryDirectory(prefix='yuganth-http-', dir=temp_root) as temp:
         check(request('/admin/orders')[0] == 200, 'admin order access')
         check(request('/admin/banner', {'value':'Seasonal offer'})[0] == 200, 'admin banner write')
         check(request('/settings')[1]['banner'] == 'Seasonal offer', 'banner reaches public API')
-        check(request('/admin/variant', {'id':'guntur-gold-100','price_paise':5500,'stock':5,'active':1,'expected_stock':0})[0] == 200, 'admin catalogue update')
-        check(request('/admin/variant', {'id':'guntur-gold-100','price_paise':5500,'stock':6,'active':1,'expected_stock':0})[0] == 409, 'stale inventory edit rejected')
+        check(request('/admin/variant', {'id':'guntur-gold-500','price_paise':5500,'stock':5,'active':1,'expected_stock':0,'price_confirmed':1})[0] == 200, 'admin catalogue update')
+        check(request('/admin/variant', {'id':'guntur-gold-500','price_paise':5500,'stock':6,'active':1,'expected_stock':0})[0] == 409, 'stale inventory edit rejected')
+        status, products = request('/admin/products')
+        check(status == 200 and len(products['products']) == 6, 'six products in admin')
+        product = next(p for p in products['products'] if p['id'] == 'peanuts')
+        update = {**product, 'active':1, 'launch_status':'coming_soon'}
+        check(request('/admin/product', update)[0] == 200, 'admin product content edit')
+        check(request('/cart/quote', {'items':[{'variant_id':'guntur-gold-500','quantity':2}],'pincode':'530028'})[0] == 200, 'confirmed existing product quote')
+        check(request('/admin/variant', {'id':'peanuts-500','price_paise':10000,'stock':10,'active':1,'expected_stock':0,'price_confirmed':1})[0] == 200, 'prepare coming soon stock')
+        check(request('/cart/quote', {'items':[{'variant_id':'peanuts-500','quantity':1}],'pincode':'530028'})[0] == 409, 'coming soon is server blocked')
+        check(request('/admin/variant', {'id':'peanuts-500','price_paise':0,'stock':10,'active':1,'expected_stock':10,'price_confirmed':1})[0] == 422, 'cannot confirm zero price')
+        update['launch_status']='available'
+        check(request('/admin/product', update)[0] == 200, 'admin can launch product')
+        check(request('/cart/quote', {'items':[{'variant_id':'peanuts-500','quantity':1}],'pincode':'530028'})[0] == 200, 'launched product quotable')
+        update['active']=0
+        request('/admin/product', update)
+        check(not any(p['id']=='peanuts' for p in request('/catalog')[1]['products']), 'hidden product omitted from public catalogue')
+        update['active']=1
+        request('/admin/product', update)
         with opener.open(base+'index.html') as response: check(response.status == 200, 'storefront serves')
         print(f'PASS: {checks} HTTP integration assertions')
     finally:

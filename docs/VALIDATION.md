@@ -1,11 +1,14 @@
-# Validation record
+# Validation record — 22 October 2026
 
-Validated locally on 16 October 2026 using the official PHP 8.4.26 Windows runtime, PDO SQLite, Python standard-library HTTP client and Node JavaScript syntax checking.
+The integrated release was checked locally using PHP 8.4.26, PDO SQLite, Python's standard-library HTTP runner, Node syntax checks and the in-app browser.
 
-- All application PHP files passed syntax checks.
-- All browser JavaScript files passed syntax checks.
-- 27 commerce assertions passed: idempotent seeds, server prices, coupon cap and eligibility, delivery rejection, invalid quantities, duplicate-line limits, client-total tampering, inventory reservation, order idempotency, conflicting key rejection, coupon usage limit, order ownership, wrong captured amount, duplicate webhook, exactly-once notification enqueueing, paid-order cancellation rejection, fulfilment transitions, one-time restocking, expiration, late capture rejection and stock rollback.
-- 30 HTTP assertions passed: session and default-disabled checkout, authentication, CSRF, registration, customer/admin access restrictions, saved-address ownership, unknown order handling, password reset enqueueing, logout, login, reset single-use and session invalidation, admin banner updates, public banner output, inventory updates, stale inventory protection, fail-closed payment webhook and storefront HTTP response.
-- Static packaging checks verify local asset paths and unique initial DOM IDs on public pages.
+- **29 commerce assertions passed:** server totals, delivery, coupon rules, stock reservation/rollback, idempotency, ownership, capture amount/state, duplicate verified payment events, cancellation/expiry and fulfilment. New checks reject coming-soon products and unconfirmed prices even if stock exists.
+- **10 upgrade assertions passed:** migrate the previous schema, preserve customer/order/historic line records, retain existing prices/stock, deactivate old sizes, retire Pure Gold without deletion, create six active products, and preserve later admin decisions on repeat installation.
+- **39 HTTP assertions passed:** authentication, CSRF, role checks, reset/session invalidation, addresses, admin editing, price confirmation, stale inventory checks, public catalogue visibility, coming-soon restrictions and a disabled payment webhook.
+- All application PHP and JavaScript files passed syntax checks. Public HTML asset references and initial IDs were checked during packaging.
+- Browser integration exercised admin sign-in, six product editors, saving a confirmed ₹270 test price and five units of stock, viewing the price on Guntur Gold, adding a 500 g pack to the bag, opening checkout, checking a configured postcode, calculating ₹60 test delivery and a ₹330 total, creating an UNPAID manual-test reservation, viewing it in account history and cancelling it. Available stock returned to five. These were synthetic local test settings, not live business prices or stock.
+- The updated checkbox-based admin save controls were exercised. Admin and storefront pages had no document-level horizontal overflow at a 390 CSS-pixel viewport. The approved design previously had viewport checks at 320, 360, 390, 768 and 1440 px. Physical phones were not tested.
 
-These are development checks, not production certification. No real merchant provider, WhatsApp transport, SMTP service, courier or Hostinger account was connected. Browser rendering and real-device mobile QA remain outstanding. MySQL/MariaDB compatibility and concurrent checkout need staging verification; SQLite results do not establish MySQL locking behavior. The CI workflow is supplied; local checks do not imply GitHub Actions has run successfully.
+No actual payment, WhatsApp message, reset email or Hostinger deployment was performed. MySQL/MariaDB upgrade behavior and concurrent checkout still need staging verification. Image cutouts are AI-assisted website assets; verify final labels against approved production artwork.
+
+The CI workflow runs syntax checks and all three backend suites. Local pass results do not imply a GitHub Actions run has completed.

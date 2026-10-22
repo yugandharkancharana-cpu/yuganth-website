@@ -19,18 +19,22 @@ Base: `api/index.php?route=PATH`. All responses are JSON. Same-origin session co
 | `/orders/ID/cancel` | POST | Cancel own unpaid reservation; restore stock exactly once |
 | `/orders/ID/payment` | POST | Create/reuse configured provider checkout |
 | `/webhooks/payment` | POST | Raw provider request; requires configured adapter signature verification |
+| `/admin/products` | GET | All product records for admin, including retired historical records |
+| `/admin/product` | POST | id, name, description, origin, category (spices/seeds/nuts/flours), launch_status (available/coming_soon), active (0/1) |
 | `/admin/variants` | GET | Administrator pack list |
-| `/admin/variant` | POST | id, price_paise, stock, active (0/1), expected_stock; prevents stale stock edits |
+| `/admin/variant` | POST | id, price_paise, stock, active (0/1), price_confirmed (0/1), expected_stock; prevents stale stock edits |
 | `/admin/coupons` | GET | Coupon rules and reserved/used count |
 | `/admin/coupon` | POST | code, percent, minimum_paise, max_discount_paise, usage_limit, starts_at, ends_at, active |
 | `/admin/banner` | POST | value, up to 300 bytes |
 | `/admin/orders` | GET | Latest 100 orders |
 | `/admin/order` | POST | id, status (cancelled/shipped/delivered), tracking_url (HTTPS for shipped) |
 
-`items`: `[{"variant_id":"guntur-gold-100","quantity":2}]`. Duplicate variant entries are aggregated; max 99 per variant, 50 input lines. Client prices and totals are ignored. Reusing an idempotency key with a different validated cart/address/coupon fails with 409.
+`items`: `[{"variant_id":"guntur-gold-500","quantity":2}]`. Duplicate variant entries are aggregated; max 99 per variant, 50 input lines. Client prices and totals are ignored. Reusing an idempotency key with a different validated cart/address/coupon fails with 409.
 
 `address`: `{name,phone,line1,line2,city,state,pincode}`. All are strings; line2 is optional. Phone is a ten-digit Indian mobile number; postcode is six digits and must be configured as serviceable for checkout.
 
 Timestamps are Unix seconds in UTC. All money fields ending in `_paise` are integers. Database drivers may serialize numeric columns as strings, so clients should convert explicitly. The frontend shows INR.
 
 Order lifecycle: `pending_payment → processing → shipped → delivered`. Only a verified provider capture can enter `processing`. Unpaid orders may become `cancelled` or `expired`. Cancelling a paid order or refunding it requires the future provider refund flow; the generic admin does not silently refund money.
+
+Public catalogue products include launch_status and origin; variants include price_confirmed. The server rejects coming-soon products, inactive products/packs, zero or unconfirmed prices and insufficient stock. Fresh catalogue prices are zero/unconfirmed; admin must set real prices.
