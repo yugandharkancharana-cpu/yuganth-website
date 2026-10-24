@@ -1,87 +1,24 @@
-# Yuganth website
+# Yuganth animated store + administration
 
-Custom responsive storefront with a PHP commerce backend and a small store administration interface. Prepared for developer integration and Hostinger deployment. **This is a development handover, not a live, certified production store.**
+The October 24 animated forest-green / gold design is integrated with the PHP store backend. This package replaces the previous storefront source; existing database records and private configuration must be preserved during upgrades.
 
-## Included
+- Animated desktop and mobile storefront, six new pack images, product filters, real variant-ID shopping bag and checkout handoff.
+- `public/admin.html`: add products, upload images, edit names/descriptions/origins/categories/card colours/visibility/launch status, confirm prices and update stock.
+- Offers: percentage coupon rules with start/end dates, minimum subtotal, cap and usage limits.
+- Scrolling announcement: text, visibility and speed (12–90 seconds) controlled in admin.
+- Reviews page: signed-in submissions, private drafts, pending/approved/rejected moderation; verified-purchase badge derived from paid orders.
+- Customer accounts, addresses, order history and fulfillment retained.
 
-- Approved forest-green/ivory storefront with six transparent product cutouts, category views, spotlight carousel, mobile navigation and Our Story.
-- PHP JSON API, MySQL/MariaDB deployment schema and SQLite local test support.
-- Registration, sign-in/out, password hashing, CSRF protection, idle session expiry, rate limiting, password reset via notification outbox, saved addresses and order history.
-- Server-authoritative prices, delivery checks, percentage coupons, transactional stock reservations, idempotent orders, expiry/cancellation, verified-payment state transition and fulfilment tracking.
-- Admin screens for product descriptions/categories/visibility/launch status, confirmed variant prices, stock, percentage coupons, banner text and shipment/delivery updates.
-- Payment and email/WhatsApp provider interfaces; disabled by default. Optional WhatsApp click-to-chat link.
-- Automated business-rule and HTTP integration tests, plus a GitHub Actions check workflow.
+## Run locally
 
-## What developers still need to finish
+Requires PHP 8.3+ with PDO SQLite (or MySQL), GD with WebP support for image uploads, and Python only for tests. No Node build is required.
 
-Choose and integrate the payment SDK, browser checkout, signature-verified capture webhook, provider mapping/reconciliation and refunds. Connect transactional email (required for password recovery) and WhatsApp Business with consent/templates if wanted. Confirm catalogue/pack prices/stock, legal content, delivery areas, tax/invoicing and courier requirements. Test the layout on real phones and test MySQL under concurrency on staging. Existing WordPress customers/orders are NOT migrated automatically.
+1. Copy `config/config.example.php` to `config/local.php` and set a database connection and base URL.
+2. Run `php bin/console.php install` from the package root. This adds missing tables/columns and seeds the catalogue without deleting customer/order history.
+3. Set `YUGANTH_ADMIN_PASSWORD` to your own strong password in the current terminal, then run `php bin/console.php admin your-real-email@example.com`. Clear the environment variable afterwards. Never use example credentials on a live store.
+4. Run `php -S 127.0.0.1:8080 -t public`, then open http://127.0.0.1:8080.
+5. Sign in at `/account.html`, then select **Open store administration**, or visit `/admin.html`.
 
-No customer data, database passwords, API keys or provider credentials are included. Fresh product prices start at zero/unconfirmed and stock starts at zero; checkout is disabled until deliberately configured. Chia Seeds, Peanuts and Ragi Flour start as coming soon. The separate Pure Gold SKU is retired without deleting historical records.
+Prices start unconfirmed with zero stock. Set real prices/stock and explicitly confirm each pack price. Checkout remains disabled until your developers configure and test the payment adapter, delivery coverage and production settings. Email and WhatsApp automation require their own provider integrations. This update does not deploy to Hostinger.
 
-## Requirements
-
-PHP 8.3+ with PDO, PDO MySQL for Hostinger, or PDO SQLite for local tests. MySQL 8 / compatible MariaDB with InnoDB is the intended production database. Python 3 is used only for the HTTP test runner. No frontend build is needed.
-
-## Upgrading an existing installation
-
-Read [UPGRADE.md](docs/UPGRADE.md) first. Back up the database, retain private configuration and storage, then run the additive installer against the SAME database. Do not replace the existing database with a fresh one. The upgrade preserves users/orders and requires price review for the new packaging.
-
-## Local setup
-
-```sh
-cp config/config.example.php config/local.php
-php bin/console.php install
-php -S 127.0.0.1:8080 -t public
-```
-
-Open `http://127.0.0.1:8080`. Files opened directly with `file://` do not run PHP. Browse `account.html`, `checkout.html` and `admin.html` through the server.
-
-Create an administrator using a unique password supplied through `YUGANTH_ADMIN_PASSWORD` in the current terminal environment, then:
-
-```sh
-php bin/console.php admin admin@your-company-domain.example
-```
-
-Use your real administrator address. Unset the password environment variable immediately afterwards; never pass the password in command arguments, commit it or share it in a chat. The command refuses to overwrite/promote an existing account.
-
-For a local checkout test, edit the private `config/local.php`: set `checkout_enabled=true`, `catalog_verified=true`, `payment_driver=manual_test`, and list exact `serviceable_pincodes` as strings. Add stock through the admin page. Manual test orders collect no money and cannot receive paid webhooks. Production rejects this driver.
-
-## Tests
-
-```sh
-php tests/commerce.php
-php tests/migration.php
-python3 tests/integration_http.py /absolute/path/to/php
-```
-
-The HTTP suite creates an isolated temporary SQLite database and starts/stops its own local PHP server. `YUGANTH_TEST_TEMP` can select a writable temporary parent directory. Test data is never sent to payment or WhatsApp providers. See `docs/VALIDATION.md` for checks actually run and outstanding verification.
-
-## Structure
-
-```text
-public/                  ONLY this directory is web-accessible
-  index.html             Approved storefront
-  account.html           Customer account and orders
-  checkout.html          Address, quote, order and payment handoff
-  admin.html             Administrator UI (API enforces role)
-  api/index.php          JSON endpoint router
-  assets/                CSS, JavaScript and product images
-app/                     Server services and integration interfaces
-config/                  Example and private local configuration
-database/schema.sql      Initial database schema
-bin/console.php          Install, admin, reservation expiry, outbox
-tests/                   Commerce and HTTP integration checks
-docs/                    Deployment, API and provider handover
-```
-
-Start with [Hostinger deployment](docs/HOSTINGER.md), then [provider integration](docs/INTEGRATIONS.md) and [API reference](docs/API.md).
-
-Brand colours remain editable in `public/assets/style.css`. Banner wording is editable in the admin page. Coupon rules and banner text are separate, so an advertised offer must match a valid backend coupon.
-
-## Official references
-
-- [Hostinger File Manager](https://www.hostinger.com/support/4548688-basic-actions-in-the-file-manager-in-hostinger/)
-- [PHP session security](https://www.php.net/manual/en/session.security.ini.php)
-- [PHP PDO transactions](https://www.php.net/manual/en/pdo.transactions.php)
-
-Company-specific assets and source are supplied for Yuganth's developer handover; no open-source licence is granted by this repository.
+Read [Hostinger deployment](docs/HOSTINGER.md), [upgrade guide](docs/UPGRADE.md), [integrations](docs/INTEGRATIONS.md), [API](docs/API.md), and [validation](docs/VALIDATION.md).

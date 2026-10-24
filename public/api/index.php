@@ -14,7 +14,8 @@ try {
     $route = $_GET['route'] ?? '/session';
     if (!is_string($route)) throw new ApiError(404,'Route not found.');
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-    $raw = file_get_contents('php://input',false,null,0,65537);
+    $upload=$route==='/admin/image' && $method==='POST';
+    $raw = $upload ? '' : file_get_contents('php://input',false,null,0,65537);
     if (strlen($raw)>65536) throw new ApiError(413,'Request too large.');
     if ($route === '/webhooks/payment' && $method==='POST') {
         // No session/CSRF for provider callbacks: authentication is the gateway's verified signature.
@@ -25,6 +26,19 @@ try {
     }
     sessionStart();
     if (!in_array($method,['GET','POST'],true)) throw new ApiError(405,'Method not allowed.');
+    if($upload){
+        $u=user(true);
+        if(!hash_equals($_SESSION['csrf'],$_SERVER['HTTP_X_CSRF_TOKEN']??''))throw new ApiError(419,'Refresh and try again.');
+        $file=$_FILES['image']??null;
+        if(!$file||$file['error']!==UPLOAD_ERR_OK||$file['size']>4194304||!is_uploaded_file($file['tmp_name']))throw new ApiError(422,'Upload a PNG, JPEG or WebP up to 4 MB.');
+        if(!function_exists('imagecreatefromstring'))throw new ApiError(503,'Enable the PHP GD extension for product uploads.');
+        $info=@getimagesize($file['tmp_name']);
+        if(!$info||!in_array($info[2],[IMAGETYPE_PNG,IMAGETYPE_JPEG,IMAGETYPE_WEBP],true)||$info[0]>3000||$info[1]>3000||$info[0]*$info[1]>6000000)throw new ApiError(422,'Use a PNG, JPEG or WebP up to 3000 pixels and 6 megapixels.');
+        $image=@imagecreatefromstring(file_get_contents($file['tmp_name']));if(!$image)throw new ApiError(422,'Invalid image.');
+        imagepalettetotruecolor($image);imagealphablending($image,false);imagesavealpha($image,true);
+        $name='media/'.uid().'.webp';$dir=dirname(__DIR__).'/media';if(!is_dir($dir)&&!mkdir($dir,0755,true))throw new ApiError(503,'Upload directory unavailable.');
+        if(!imagewebp($image,dirname(__DIR__).'/'.$name,88))throw new ApiError(503,'Unable to save image.');imagedestroy($image);audit('image.uploaded',$name,$u['id']);reply(['image'=>$name]);
+    }
     $input = [];
     if ($method === 'POST') {
         if (!str_starts_with(strtolower($_SERVER['CONTENT_TYPE']??''),'application/json')) throw new ApiError(415,'Use application/json.');
@@ -37,7 +51,7 @@ try {
         reply(['user'=>$u,'csrf'=>$_SESSION['csrf'],'checkout_enabled'=>(bool)(config()['checkout_enabled']&&config()['catalog_verified']&&!(gateway() instanceof \Yuganth\DisabledGateway))]);
     }
     if ($method==='GET' && $route==='/catalog') reply(['products'=>catalogue()]);
-    if ($method==='GET' && $route==='/settings') reply(['banner'=>one('SELECT value FROM settings WHERE name=?',['banner'])['value']??'FROM OUR ROOTS. TO YOUR KITCHEN.','whatsapp_number'=>config()['whatsapp_number']]);
+    if ($method==='GET' && $route==='/settings') reply(['banner'=>one('SELECT value FROM settings WHERE name=?',['banner'])['value']??'FROM OUR ROOTS. TO YOUR KITCHEN.','banner_speed'=>(int)(one('SELECT value FROM settings WHERE name=?',['banner_speed'])['value']??30),'banner_enabled'=>(int)(one('SELECT value FROM settings WHERE name=?',['banner_enabled'])['value']??1),'whatsapp_number'=>config()['whatsapp_number']]);
     if ($method==='POST' && in_array($route,['/auth/register','/auth/login'],true)) {
         throttle('auth',20);
         $email=strtolower(text($input['email']??null,254,'email'));
@@ -103,8 +117,27 @@ try {
             reply(['checkout'=>gateway()->createCheckout($o)]);
         }
     }
+    if($method==='GET'&&$route==='/reviews')reply(['reviews'=>rows("SELECT r.id,r.product_id AS product,r.rating,r.display_name AS name,r.title,r.body AS text,r.verified_purchase,r.created_at FROM reviews r JOIN products p ON p.id=r.product_id WHERE r.status='approved' AND p.active=1 ORDER BY r.created_at DESC LIMIT 200")]);
+    if($method==='GET'&&$route==='/reviews/mine'){$u=user();reply(['reviews'=>rows('SELECT product_id AS product,rating,title,body AS text,status FROM reviews WHERE user_id=? ORDER BY created_at DESC',[$u['id']])]);}
+    if($method==='POST'&&$route==='/reviews'){
+        $u=user();throttle('review',10);$product=text($input['product']??null,40,'product');$p=one('SELECT id FROM products WHERE id=? AND active=1 AND launch_status=?',[$product,'available']);if(!$p)throw new ApiError(422,'Choose a launched product.');
+        $rating=integer($input['rating']??null,1,5,'rating');$name=text($input['name']??null,80,'display name');$title=text($input['title']??null,100,'title');$body=text($input['text']??null,1500,'review',15);
+        transaction(function()use($u,$product,$rating,$name,$title,$body){
+            $verified=one("SELECT o.id FROM orders o JOIN order_items i ON i.order_id=o.id JOIN variants v ON v.id=i.variant_id WHERE o.user_id=? AND v.product_id=? AND o.status IN ('processing','shipped','delivered') LIMIT 1",[$u['id'],$product])?1:0;
+            $old=one('SELECT id FROM reviews WHERE user_id=? AND product_id=?'.\Yuganth\lockSuffix(),[$u['id'],$product]);
+            if($old)query("UPDATE reviews SET rating=?,display_name=?,title=?,body=?,status='pending',verified_purchase=?,created_at=?,moderated_at=NULL,moderated_by=NULL WHERE id=?",[$rating,$name,$title,$body,$verified,now(),$old['id']]);
+            else query('INSERT INTO reviews (id,user_id,product_id,rating,display_name,title,body,status,verified_purchase,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',[uid(),$u['id'],$product,$rating,$name,$title,$body,'pending',$verified,now()]);
+        });reply(['status'=>'pending','message'=>'Submitted for moderation.']);
+    }
     if (str_starts_with($route,'/admin/')) {
         $u=user(true);
+        if($method==='GET'&&$route==='/admin/reviews')reply(['reviews'=>rows('SELECT r.*,p.name AS product_name FROM reviews r JOIN products p ON p.id=r.product_id ORDER BY r.created_at DESC LIMIT 200')]);
+        if($method==='POST'&&$route==='/admin/review'){
+            $id=text($input['id']??null,32,'review');$status=$input['status']??'';if(!in_array($status,['approved','rejected','pending'],true))throw new ApiError(422,'Invalid review status.');
+            if(!one('SELECT id FROM reviews WHERE id=?',[$id]))throw new ApiError(404,'Review not found.');
+            query('UPDATE reviews SET status=?,moderated_at=?,moderated_by=? WHERE id=?',[$status,now(),$u['id'],$id]);audit('review.'.$status,$id,$u['id']);reply(['saved'=>true]);
+        }
+
         if($method==='GET'&&$route==='/admin/orders')reply(['orders'=>rows('SELECT id,status,user_id,total_paise,created_at,tracking_url FROM orders ORDER BY created_at DESC LIMIT 100')]);
         if($method==='GET'&&$route==='/admin/coupons')reply(['coupons'=>rows('SELECT * FROM coupons ORDER BY code')]);
         if($method==='GET'&&$route==='/admin/products')reply(['products'=>rows('SELECT * FROM products ORDER BY id')]);
@@ -113,7 +146,18 @@ try {
             $category=$input['category']??'';$status=$input['launch_status']??'';$active=integer($input['active']??1,0,1,'active');
             if(!in_array($category,['spices','seeds','nuts','flours'],true)||!in_array($status,['available','coming_soon'],true))throw new ApiError(422,'Invalid category or launch status.');
             if($id==='pure-gold'&&$active)throw new ApiError(422,'Pure Gold is retired from this catalogue. Its records are retained for order history.');
-            transaction(function()use($id,$name,$description,$origin,$category,$status,$active,$u){if(!one('SELECT id FROM products WHERE id=?'.\Yuganth\lockSuffix(),[$id]))throw new ApiError(404,'Product not found.');query('UPDATE products SET name=?,description=?,origin=?,category=?,launch_status=?,active=? WHERE id=?',[$name,$description,$origin,$category,$status,$active,$id]);audit('product.updated',$id,$u['id']);});reply(['saved'=>true]);
+            if(!preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D',$id))throw new ApiError(422,'Use a lowercase product ID with letters, numbers and hyphens.');
+            $old=one('SELECT * FROM products WHERE id=?',[$id]);
+            $image=text($input['image']??($old['image']??''),255,'image');
+            if(!preg_match('~^(assets/[a-z0-9-]+\.(?:png|jpg|jpeg|webp)|media/[a-f0-9]{32}\.webp)$~D',$image)||!is_file(dirname(__DIR__).'/'.$image))throw new ApiError(422,'Choose an existing product image or upload one.');
+            $bg=$input['theme_color']??($old['theme_color']??'#245544');$ink=$input['text_color']??($old['text_color']??'#f6f0df');$type=text($input['product_type']??($old['product_type']??''),80,'product type',0);
+            if(!is_string($bg)||!is_string($ink)||!preg_match('/^#[a-f0-9]{6}$/iD',$bg)||!preg_match('/^#[a-f0-9]{6}$/iD',$ink))throw new ApiError(422,'Use six-digit hex colours.');
+            transaction(function()use($id,$name,$description,$origin,$category,$status,$active,$u,$image,$bg,$ink,$type){
+                $exists=one('SELECT id FROM products WHERE id=?'.\Yuganth\lockSuffix(),[$id]);
+                if($exists)query('UPDATE products SET name=?,description=?,origin=?,category=?,launch_status=?,active=?,image=?,theme_color=?,text_color=?,product_type=? WHERE id=?',[$name,$description,$origin,$category,$status,$active,$image,$bg,$ink,$type,$id]);
+                else{query('INSERT INTO products (id,name,description,origin,category,launch_status,active,image,theme_color,text_color,product_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)',[$id,$name,$description,$origin,$category,$status,$active,$image,$bg,$ink,$type]);query('INSERT INTO variants (id,product_id,weight_g,price_paise,stock,price_confirmed) VALUES (?,?,500,0,0,0)',[$id.'-500',$id]);}
+                audit('product.saved',$id,$u['id']);
+            });reply(['saved'=>true]);
         }
         if($method==='GET'&&$route==='/admin/variants')reply(['variants'=>rows('SELECT v.*,p.name FROM variants v JOIN products p ON p.id=v.product_id ORDER BY v.id')]);
         if($method==='POST'&&$route==='/admin/variant'){
@@ -128,7 +172,7 @@ try {
             transaction(function()use($code,$values,$u){$old=one('SELECT code FROM coupons WHERE code=?'.\Yuganth\lockSuffix(),[$code]);if($old)query('UPDATE coupons SET percent=?,minimum_paise=?,max_discount_paise=?,usage_limit=?,starts_at=?,ends_at=?,active=? WHERE code=?',[...$values,$code]);else query('INSERT INTO coupons (percent,minimum_paise,max_discount_paise,usage_limit,starts_at,ends_at,active,code) VALUES (?,?,?,?,?,?,?,?)',[...$values,$code]);audit('coupon.saved',$code,$u['id']);});reply(['saved'=>true]);
         }
         if($method==='POST'&&$route==='/admin/banner'){
-            $value=text($input['value']??null,300,'banner');transaction(function()use($value,$u){query('DELETE FROM settings WHERE name=?',['banner']);query('INSERT INTO settings (name,value) VALUES (?,?)',['banner',$value]);audit('banner.updated','banner',$u['id']);});reply(['saved'=>true]);
+            $value=text($input['value']??null,300,'banner');$speed=integer($input['speed']??30,12,90,'scroll duration');$enabled=integer($input['enabled']??1,0,1,'enabled');transaction(function()use($value,$speed,$enabled,$u){foreach(['banner'=>$value,'banner_speed'=>(string)$speed,'banner_enabled'=>(string)$enabled] as $key=>$val){query('DELETE FROM settings WHERE name=?',[$key]);query('INSERT INTO settings (name,value) VALUES (?,?)',[$key,$val]);}audit('banner.updated','banner',$u['id']);});reply(['saved'=>true]);
         }
         if($method==='POST'&&$route==='/admin/order'){
             $id=text($input['id']??null,32,'order ID');$status=$input['status']??'';

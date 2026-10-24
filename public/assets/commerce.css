@@ -3,3 +3,7 @@ body.commerce-page{background:#f7f3e9;color:#25291f;font:16px/1.6 Arial,sans-ser
 #productsAdmin{display:grid;grid-template-columns:1fr 1fr;gap:20px}#productsAdmin form{margin:0;padding:16px}#productsAdmin h3{font:24px Georgia,serif}#productsAdmin textarea{min-height:100px}@media(max-width:700px){#productsAdmin{grid-template-columns:1fr}}
 
 .product-editor{border:1px solid #dedacb;border-radius:7px;background:#fffaf0}.product-editor>summary{cursor:pointer;padding:16px;min-height:54px;font-size:14px}.product-editor form{border:0}#variants input[type=checkbox]{margin:auto}
+
+.product-editor form{overflow-wrap:anywhere}.product-editor input,.product-editor select,.product-editor textarea{max-width:100%}#reviewsAdmin button{margin:5px}input[type="color"]{min-height:44px}
+
+[hidden]{display:none!important}

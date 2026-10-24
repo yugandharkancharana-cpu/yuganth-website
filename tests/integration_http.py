@@ -8,7 +8,7 @@ root = pathlib.Path(__file__).resolve().parents[1]
 php = str(pathlib.Path(sys.argv[1]).resolve()) if len(sys.argv) > 1 else 'php'
 cmd = [php]
 if len(sys.argv) > 2:
-    cmd += ['-d', 'extension_dir=' + str(pathlib.Path(sys.argv[2]).resolve()), '-d', 'extension=pdo_sqlite']
+    cmd += ['-d', 'extension_dir=' + str(pathlib.Path(sys.argv[2]).resolve()), '-d', 'extension=pdo_sqlite', '-d', 'extension=gd']
 checks = 0
 
 def check(condition, label):
@@ -124,6 +124,53 @@ with tempfile.TemporaryDirectory(prefix='yuganth-http-', dir=temp_root) as temp:
         update['active']=1
         request('/admin/product', update)
         with opener.open(base+'index.html') as response: check(response.status == 200, 'storefront serves')
+        check(request('/admin/banner', {'value':'TEST OFFER','speed':18,'enabled':0})[0]==200, 'scroll controls saved')
+        settings=request('/settings')[1]
+        check(settings['banner_speed']==18 and settings['banner_enabled']==0, 'public scrolling settings')
+        check(request('/admin/banner', {'value':'bad','speed':2})[0]==422, 'invalid scroll speed rejected')
+        newproduct={**product,'id':'test-pantry','name':'Test Pantry','active':1,'launch_status':'coming_soon','image':'assets/guntur-gold-cutout.webp'}
+        check(request('/admin/product',newproduct)[0]==200, 'create new product')
+        created=next(p for p in request('/catalog')[1]['products'] if p['id']=='test-pantry')
+        check(created['variants'][0]['price_confirmed']==0 and created['variants'][0]['stock']==0, 'new product cannot sell before setup')
+        check(request('/admin/product',{**newproduct,'image':'../../config/local.php'})[0]==422,'image traversal rejected')
+        check(request('/admin/product',{**newproduct,'theme_color':'red;position:fixed'})[0]==422,'unsafe theme rejected')
+        review={'product':'guntur-gold','rating':5,'name':'Test Customer','title':'A good curry','text':'We cooked a family curry with this pack.','status':'approved','verified_purchase':1}
+        check(request('/reviews',review,token=False)[0]==419,'review CSRF enforced')
+        check(request('/reviews',{**review,'rating':6})[0]==422,'invalid review rating rejected')
+        check(request('/reviews',{**review,'product':'chia-seeds'})[0]==422,'unlaunched review rejected')
+        check(request('/reviews',review)[0]==200,'review submitted')
+        check(not request('/reviews')[1]['reviews'],'pending review not public')
+        check(request('/reviews/mine')[1]['reviews'][0]['status']=='pending','own submission visible')
+        pending=request('/admin/reviews')[1]['reviews'][0]
+        check(pending['status']=='pending' and pending['verified_purchase']==0,'client cannot spoof approval or paid purchase')
+        check(request('/admin/review',{'id':pending['id'],'status':'approved'})[0]==200,'admin approves review')
+        published=request('/reviews')[1]['reviews']
+        check(len(published)==1 and 'user_id' not in published[0] and 'email' not in published[0],'public review excludes private account data')
+        check(request('/reviews',{**review,'title':'Edited experience'})[0]==200 and not request('/reviews')[1]['reviews'],'editing requires fresh approval')
+        check(request('/admin/review',{'id':pending['id'],'status':'rejected'})[0]==200 and not request('/reviews')[1]['reviews'],'rejected review hidden')
+        import struct,zlib
+        def chunk(kind,data): return struct.pack('!I',len(data))+kind+data+struct.pack('!I',zlib.crc32(kind+data)&0xffffffff)
+        png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('!IIBBBBB',2,2,8,6,0,0,0))+chunk(b'IDAT',zlib.compress((b'\0'+b'\xff\0\0\xff'*2)*2))+chunk(b'IEND',b'')
+        def upload(payload,name):
+            boundary='YuganthTestBoundary'
+            body=(f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="{name}"\r\nContent-Type: image/png\r\n\r\n'.encode()+payload+f'\r\n--{boundary}--\r\n'.encode())
+            req=urllib.request.Request(base+'api/index.php?route=%2Fadmin%2Fimage',data=body,headers={'Content-Type':'multipart/form-data; boundary='+boundary,'X-CSRF-Token':csrf})
+            try:
+                with opener.open(req) as resp:return resp.status,json.load(resp)
+            except urllib.error.HTTPError as e:return e.code,json.load(e)
+        check(upload(b'<?php echo 1; ?>','evil.php')[0]==422,'executable upload rejected')
+        status,image=upload(png,'pack.png')
+        check(status==200 and image['image'].endswith('.webp'),'image reencoded')
+        imagefile=root/'public'/image['image']
+        try:
+            check(imagefile.read_bytes()[:4]==b'RIFF','stored WebP validated')
+            check(request('/admin/product',{**newproduct,'image':image['image']})[0]==200,'uploaded image assigned')
+        finally:imagefile.unlink(missing_ok=True)
+        status,result=request('/auth/login',{'email':'other@example.com','password':'another-password-123'});csrf=result['csrf']
+        check(request('/admin/reviews')[0]==403,'customer cannot inspect moderation queue')
+        check(request('/admin/review',{'id':pending['id'],'status':'approved'})[0]==403,'customer cannot publish review')
+        check(upload(png,'pack.png')[0]==403,'customer cannot upload store images')
+        check(not request('/reviews/mine')[1]['reviews'],'review ownership')
         print(f'PASS: {checks} HTTP integration assertions')
     finally:
         server.terminate(); server.wait(timeout=10); log.close()

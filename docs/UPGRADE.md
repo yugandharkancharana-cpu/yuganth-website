@@ -52,3 +52,11 @@ The storefront and checkout now share a variant-ID cart (`yuganth-cart-v2`) with
 ## Before production
 
 Complete the payment/refund/reconciliation and email/WhatsApp integrations in INTEGRATIONS.md. Confirm final labels, images, prices, legal policies, shipping and tax requirements. Test MySQL concurrency, production HTTPS and physical mobile devices. This release has local SQLite and browser checks; it is not a substitute for the staging acceptance process in HOSTINGER.md.
+
+
+## Animated storefront and admin upgrade (2026-10-24)
+Back up the database, `config/local.php`, storage, and uploaded `public/media` images first. Deploy application source and assets while preserving those private/data locations. Do not replace a live database with the QA database. Run `php bin/console.php install` once using the production configuration. The migration adds theme/subtitle fields, a reviews table and announcement settings; it preserves existing prices, stock, orders and customers. Card colours for the six existing packs are initialized once. Uploaded images are not in GitHub; retain and back them up separately.
+
+Enable PHP GD with WebP support. Make `public/media` writable by PHP; keep its `.htaccess`. Configure `upload_max_filesize=4M`, `post_max_size=6M` or higher; the app also enforces a 4 MB limit, maximum 3000 pixels per side and 6 megapixels. Only PNG/JPEG/WebP images are accepted and rewritten as WebP. Transparent pack images look best.
+
+Sign in through `account.html` using an administrator account and open `admin.html`. New products get an unconfirmed 500 g variant with zero stock. Prices are in paise (₹250 = 25000). Hiding products preserves order history. Banner changes are text/scroll settings; create coupon rules separately. Reviews require sign-in and admin approval. Negative reviews can be approved in the same way as positive reviews; do not publish fabricated testimonials.

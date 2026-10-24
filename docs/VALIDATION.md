@@ -12,3 +12,7 @@ The integrated release was checked locally using PHP 8.4.26, PDO SQLite, Python'
 No actual payment, WhatsApp message, reset email or Hostinger deployment was performed. MySQL/MariaDB upgrade behavior and concurrent checkout still need staging verification. Image cutouts are AI-assisted website assets; verify final labels against approved production artwork.
 
 The CI workflow runs syntax checks and all three backend suites. Local pass results do not imply a GitHub Actions run has completed.
+
+
+## Animated package, 2026-10-24
+104 assertions passed locally: 29 commerce, 10 migration and 65 HTTP integration. New checks cover scrolling settings, new products, safe image paths/themes, upload decoding/re-encoding, authentication/CSRF, review ownership, moderation, privacy and client-spoofed approval/purchase flags. PHP and JavaScript syntax checked. Browser QA verified admin sign-in, price and banner persistence into storefront, shopping bag quantity/subtotal, desktop and 390px mobile product details. Tests use an isolated SQLite database, not production MySQL; Hostinger and live payment/email/WhatsApp provider tests remain developer deployment work.

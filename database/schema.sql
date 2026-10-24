@@ -54,3 +54,11 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 CREATE TABLE IF NOT EXISTS rate_limits (bucket VARCHAR(64) PRIMARY KEY, hits INTEGER NOT NULL, expires_at BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS schema_migrations (name VARCHAR(100) PRIMARY KEY, applied_at BIGINT NOT NULL);
+
+CREATE TABLE IF NOT EXISTS reviews (
+ id VARCHAR(32) PRIMARY KEY, user_id VARCHAR(32) NOT NULL, product_id VARCHAR(40) NOT NULL,
+ rating INTEGER NOT NULL, display_name VARCHAR(80) NOT NULL, title VARCHAR(100) NOT NULL,
+ body TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending', verified_purchase INTEGER NOT NULL DEFAULT 0,
+ created_at BIGINT NOT NULL, moderated_at BIGINT NULL, moderated_by VARCHAR(32) NULL,
+ UNIQUE (user_id,product_id), FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (product_id) REFERENCES products(id)
+);

@@ -14,6 +14,11 @@ window.YuganthAPI = {
     if (data.csrf) this.csrf = data.csrf;
     return data;
   },
+  async upload(file) {
+    const body=new FormData();body.append('image',file);
+    const response=await fetch('api/index.php?route=%2Fadmin%2Fimage',{method:'POST',credentials:'same-origin',headers:{'X-CSRF-Token':this.csrf},body});
+    const data=await response.json();if(!response.ok)throw new Error(data.error||'Upload failed.');return data;
+  },
   session() { return this.request('/session'); },
   money(paise) { return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(paise) / 100); }
 };

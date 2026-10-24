@@ -38,3 +38,13 @@ Timestamps are Unix seconds in UTC. All money fields ending in `_paise` are inte
 Order lifecycle: `pending_payment → processing → shipped → delivered`. Only a verified provider capture can enter `processing`. Unpaid orders may become `cancelled` or `expired`. Cancelling a paid order or refunding it requires the future provider refund flow; the generic admin does not silently refund money.
 
 Public catalogue products include launch_status and origin; variants include price_confirmed. The server rejects coming-soon products, inactive products/packs, zero or unconfirmed prices and insufficient stock. Fresh catalogue prices are zero/unconfirmed; admin must set real prices.
+
+
+## Animated storefront additions
+- GET `/reviews`: up to 200 approved reviews for visible products; no account email or private user ID.
+- POST `/reviews`: authenticated, CSRF-protected JSON `{product,rating,name,title,text}`. Rating 1–5, text 15–1500 bytes. One review per user/product; edits return to pending. Purchase verification is derived on the server.
+- GET `/reviews/mine`: own submissions and moderation status.
+- GET `/admin/reviews`; POST `/admin/review` `{id,status}` where status is pending/approved/rejected.
+- POST `/admin/product`: creates or edits stable lowercase slug ID, name, description, origin, category, launch_status, active, image, product_type, theme_color, text_color. New IDs create a default unconfirmed 500 g variant. Images must exist under assets/ or uploaded media/.
+- POST `/admin/image`: admin-only multipart `image` and X-CSRF-Token header. Returns `{image:"media/random-id.webp"}`. Assign it to a product after upload.
+- POST `/admin/banner`: `{value,speed,enabled}`. Speed 12–90 seconds, enabled 0/1; GET `/settings` returns banner_speed and banner_enabled.
