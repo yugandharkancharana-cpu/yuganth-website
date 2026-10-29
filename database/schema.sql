@@ -62,3 +62,9 @@ CREATE TABLE IF NOT EXISTS reviews (
  created_at BIGINT NOT NULL, moderated_at BIGINT NULL, moderated_by VARCHAR(32) NULL,
  UNIQUE (user_id,product_id), FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (product_id) REFERENCES products(id)
 );
+
+CREATE TABLE IF NOT EXISTS razorpay_orders (
+ order_id VARCHAR(32) PRIMARY KEY, provider_order_id VARCHAR(80) UNIQUE,
+ key_id VARCHAR(80) NOT NULL, state VARCHAR(20) NOT NULL, created_at BIGINT NOT NULL,
+ FOREIGN KEY(order_id) REFERENCES orders(id)
+);

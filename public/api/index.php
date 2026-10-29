@@ -21,6 +21,7 @@ try {
         // No session/CSRF for provider callbacks: authentication is the gateway's verified signature.
         if (config()['environment']==='production' && ($_SERVER['HTTPS']??'')!=='on') throw new ApiError(400,'HTTPS required.');
         $verified = gateway()->verifyCapturedWebhook($raw, function_exists('getallheaders')?getallheaders():[]);
+        if(isset($verified['ignored']))reply(['received'=>true,'ignored'=>true]);
         $order = confirmPayment($verified);
         reply(['received'=>true,'order_id'=>$order['id']]);
     }
@@ -108,11 +109,17 @@ try {
         if ($method==='GET') reply(['orders'=>rows('SELECT id,status,currency,total_paise,created_at,tracking_url FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 100',[$u['id']])]);
         throttle('orders',20,3600);$o=createOrder($u['id'],$input,$_SERVER['HTTP_IDEMPOTENCY_KEY']??'');reply(['order'=>$o],201);
     }
-    if (preg_match('~^/orders/([a-f0-9]{32})(/payment|/cancel)?$~',$route,$m)) {
+    if (preg_match('~^/orders/([a-f0-9]{32})(/payment|/payment/verify|/cancel)?$~',$route,$m)) {
         $u=user();$o=getOrder($m[1],$u['id']);$action=$m[2]??'';
         if($method==='GET'&&$action==='')reply(['order'=>$o]);
         if($method==='POST'&&$action==='/cancel'){cancelOrder($o['id'],$u['id']);reply(['order'=>getOrder($o['id'],$u['id'])]);}
+        if($method==='POST'&&$action==='/payment/verify'){
+            throttle('payment-verify',40);
+            $g=gateway();if(!($g instanceof \Yuganth\RazorpayGateway))throw new ApiError(503,'Razorpay is not configured.');
+            reply(['order'=>confirmPayment($g->verifyCheckout($o,$input))]);
+        }
         if($method==='POST'&&$action==='/payment'){
+            if(!config()['checkout_enabled']||!config()['catalog_verified'])throw new ApiError(503,'Checkout is disabled.');
             if($o['status']!=='pending_payment'||(int)$o['expires_at']<=now())throw new ApiError(409,'Order is no longer payable.');
             reply(['checkout'=>gateway()->createCheckout($o)]);
         }

@@ -16,3 +16,7 @@ The CI workflow runs syntax checks and all three backend suites. Local pass resu
 
 ## Animated package, 2026-10-24
 104 assertions passed locally: 29 commerce, 10 migration and 65 HTTP integration. New checks cover scrolling settings, new products, safe image paths/themes, upload decoding/re-encoding, authentication/CSRF, review ownership, moderation, privacy and client-spoofed approval/purchase flags. PHP and JavaScript syntax checked. Browser QA verified admin sign-in, price and banner persistence into storefront, shopping bag quantity/subtotal, desktop and 390px mobile product details. Tests use an isolated SQLite database, not production MySQL; Hostinger and live payment/email/WhatsApp provider tests remain developer deployment work.
+
+
+## Razorpay update, 2026-10-29
+143 total assertions passed: existing 104 plus 26 server Razorpay checks and 13 mocked browser SDK checks. Tests cover server totals, signature tampering, merchant mapping, authorized-only rejection, captured amounts/currencies, callback/webhook deduplication, provider timeout, no duplicate creation, key rotation and cancelled reservations. Actual merchant test payments and Hostinger MySQL/webhooks have not yet been tested.

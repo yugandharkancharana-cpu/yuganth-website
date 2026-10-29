@@ -14,6 +14,11 @@ return [
     'shipping_paise' => 6000,
     'free_shipping_above_paise' => 99900,
     'serviceable_pincodes' => [], // explicitly list supported Indian postcodes
+    'razorpay_mode' => 'test', // test or live; live requires production + explicit approval below
+    'razorpay_key_id' => '',
+    'razorpay_key_secret' => '',
+    'razorpay_webhook_secret' => '', // separate secret chosen when adding the webhook
+    'razorpay_live_enabled' => false,
     'payment_driver' => 'disabled', // manual_test allowed ONLY outside production
     'payment_adapter_file' => '', // absolute path to a PHP file returning PaymentGateway
     'whatsapp_number' => '', // optional click-to-chat number, digits only

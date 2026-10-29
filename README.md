@@ -19,6 +19,6 @@ Requires PHP 8.3+ with PDO SQLite (or MySQL), GD with WebP support for image upl
 4. Run `php -S 127.0.0.1:8080 -t public`, then open http://127.0.0.1:8080.
 5. Sign in at `/account.html`, then select **Open store administration**, or visit `/admin.html`.
 
-Prices start unconfirmed with zero stock. Set real prices/stock and explicitly confirm each pack price. Checkout remains disabled until your developers configure and test the payment adapter, delivery coverage and production settings. Email and WhatsApp automation require their own provider integrations. This update does not deploy to Hostinger.
+Prices start unconfirmed with zero stock. Set real prices/stock and explicitly confirm each pack price. Razorpay Standard Checkout is implemented; checkout remains disabled until you configure private keys and test payments, delivery coverage and production settings. See docs/RAZORPAY.md. Email and WhatsApp automation require their own provider integrations. This update does not deploy to Hostinger.
 
 Read [Hostinger deployment](docs/HOSTINGER.md), [upgrade guide](docs/UPGRADE.md), [integrations](docs/INTEGRATIONS.md), [API](docs/API.md), and [validation](docs/VALIDATION.md).

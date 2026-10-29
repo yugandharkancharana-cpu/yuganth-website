@@ -15,3 +15,5 @@ __pycache__/
 /public/media/*
 !/public/media/.htaccess
 !/public/media/.gitkeep
+
+/config/razorpay.local.php

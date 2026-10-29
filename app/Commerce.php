@@ -73,7 +73,7 @@ function createOrder(string $userId, array $input, string $key): array
 {
     $c = config();
     if (!$c['checkout_enabled'] || !$c['catalog_verified'] || gateway() instanceof DisabledGateway) throw new ApiError(503, 'Checkout is not enabled yet. Please contact our team.');
-    if ($c['environment'] === 'production' && $c['payment_driver'] !== 'custom') throw new ApiError(503, 'A live payment adapter is required.');
+    if ($c['environment'] === 'production' && !in_array($c['payment_driver'],['custom','razorpay'],true)) throw new ApiError(503, 'A live payment adapter is required.');
     $key = text($key, 100, 'idempotency key', 16);
     if (!preg_match('/^[a-zA-Z0-9_-]+$/', $key)) throw new ApiError(422, 'Invalid idempotency key.');
     $lines = normalizeLines($input['items'] ?? null); $address = validateAddress($input['address'] ?? null); $coupon = couponCode($input['coupon'] ?? '');

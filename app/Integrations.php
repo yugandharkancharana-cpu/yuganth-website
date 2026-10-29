@@ -26,6 +26,7 @@ final class ManualTestGateway implements PaymentGateway
 function gateway(): PaymentGateway
 {
     $c = config();
+    if ($c['payment_driver'] === 'razorpay') { require_once __DIR__.'/Razorpay.php'; return new RazorpayGateway($c); }
     if ($c['payment_driver'] === 'manual_test' && $c['environment'] !== 'production') return new ManualTestGateway();
     if ($c['payment_driver'] === 'custom' && is_file($c['payment_adapter_file'])) {
         $adapter = require $c['payment_adapter_file'];

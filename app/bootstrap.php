@@ -15,7 +15,9 @@ function config(): array
         $config = require dirname(__DIR__) . '/config/config.example.php';
         $local = getenv('YUGANTH_CONFIG_FILE') ?: dirname(__DIR__) . '/config/local.php';
         if (is_file($local)) $config = array_replace($config, require $local);
-        foreach (['dsn' => 'YUGANTH_DSN', 'db_user' => 'YUGANTH_DB_USER', 'db_password' => 'YUGANTH_DB_PASSWORD'] as $key => $env) {
+        $paymentLocal=dirname(__DIR__).'/config/razorpay.local.php';
+        if(is_file($paymentLocal))$config=array_replace($config,require $paymentLocal);
+        foreach (['dsn' => 'YUGANTH_DSN', 'db_user' => 'YUGANTH_DB_USER', 'db_password' => 'YUGANTH_DB_PASSWORD', 'razorpay_key_id'=>'YUGANTH_RAZORPAY_KEY_ID', 'razorpay_key_secret'=>'YUGANTH_RAZORPAY_KEY_SECRET', 'razorpay_webhook_secret'=>'YUGANTH_RAZORPAY_WEBHOOK_SECRET'] as $key => $env) {
             if (getenv($env) !== false) $config[$key] = getenv($env);
         }
     }

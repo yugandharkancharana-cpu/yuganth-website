@@ -10,12 +10,16 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: pdo_sqlite, pdo_mysql, gd
+          extensions: pdo_sqlite, pdo_mysql, gd, curl
           coverage: none
       - name: PHP syntax
         run: find app bin config public/api tests -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Commerce rules
         run: php tests/commerce.php
+      - name: Razorpay verification
+        run: php tests/razorpay.php
+      - name: Razorpay browser flow
+        run: node tests/razorpay-browser.cjs
       - name: Database upgrade
         run: php tests/migration.php
       - name: HTTP integration
