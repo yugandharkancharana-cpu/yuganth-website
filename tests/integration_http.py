@@ -137,10 +137,9 @@ with tempfile.TemporaryDirectory(prefix='yuganth-http-', dir=temp_root) as temp:
         check(request('/admin/product',{**update,'gallery':list(reversed(gallery))})[0]==200,'gallery reordered')
         check(next(p for p in request('/catalog')[1]['products'] if p['id']=='peanuts')['gallery']==list(reversed(gallery)),'gallery order persisted')
         check(request('/admin/product',{**update,'gallery':[]})[0]==200,'gallery photos removed')
-        for page in ['pantry','roots','next','reviews','contact']:
-            with opener.open(base+page+'.html') as response:
-                html=response.read().decode()
-                check(response.status==200 and 'data-page="'+page+'"' in html,'separate '+page+' page serves')
+        with opener.open(base+'index.html') as response:
+            html=response.read().decode()
+            check('href="#range"' in html and 'href="#roots"' in html and 'href="#contact"' in html,'single-page navigation retained')
 
         check(request('/cart/quote', {'items':[{'variant_id':'guntur-gold-500','quantity':2}],'pincode':'530028'})[0] == 200, 'confirmed existing product quote')
         check(request('/admin/variant', {'id':'peanuts-500','price_paise':10000,'stock':10,'active':1,'expected_stock':0,'price_confirmed':1})[0] == 200, 'prepare coming soon stock')
