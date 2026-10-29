@@ -5,7 +5,10 @@ namespace Yuganth;
 function catalogue(): array
 {
     $products = rows('SELECT * FROM products WHERE active=1 ORDER BY id');
-    foreach ($products as &$p) $p['variants'] = rows('SELECT id,weight_g,price_paise,stock,price_confirmed FROM variants WHERE product_id=? AND active=1 ORDER BY weight_g', [$p['id']]);
+    foreach ($products as &$p){
+        $p['variants'] = rows('SELECT id,weight_g,price_paise,stock,price_confirmed FROM variants WHERE product_id=? AND active=1 ORDER BY weight_g', [$p['id']]);
+        $p['gallery']=json_decode($p['gallery_json']??'[]',true)?:[];unset($p['gallery_json']);
+    }
     return $products;
 }
 function validateAddress(mixed $a): array

@@ -8,7 +8,7 @@ function migrate(): void
     foreach(explode(';',$sql) as $statement){if(trim($statement)!=='')db()->exec(trim($statement).($mysql?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci':''));}
     // Additive migration from the original four-product installation. Never drop historical rows.
     $columns = [
-        'products' => ['theme_color'=>"VARCHAR(7) NOT NULL DEFAULT '#245544'",'text_color'=>"VARCHAR(7) NOT NULL DEFAULT '#f6f0df'",'product_type'=>"VARCHAR(80) NOT NULL DEFAULT ''",'launch_status'=>"VARCHAR(20) NOT NULL DEFAULT 'coming_soon'", 'origin'=>"VARCHAR(120) NOT NULL DEFAULT ''"],
+        'products' => ['gallery_json'=>"TEXT",'theme_color'=>"VARCHAR(7) NOT NULL DEFAULT '#245544'",'text_color'=>"VARCHAR(7) NOT NULL DEFAULT '#f6f0df'",'product_type'=>"VARCHAR(80) NOT NULL DEFAULT ''",'launch_status'=>"VARCHAR(20) NOT NULL DEFAULT 'coming_soon'", 'origin'=>"VARCHAR(120) NOT NULL DEFAULT ''"],
         'variants' => ['price_confirmed'=>'INTEGER NOT NULL DEFAULT 0'],
     ];
     foreach ($columns as $table=>$definitions) {

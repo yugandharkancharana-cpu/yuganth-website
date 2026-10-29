@@ -123,6 +123,25 @@ with tempfile.TemporaryDirectory(prefix='yuganth-http-', dir=temp_root) as temp:
         product = next(p for p in products['products'] if p['id'] == 'peanuts')
         update = {**product, 'active':1, 'launch_status':'coming_soon'}
         check(request('/admin/product', update)[0] == 200, 'admin product content edit')
+        gallery=[{'image':'assets/guntur-gold-cutout.webp','alt':'Front view'},{'image':'assets/araku-gold-cutout.webp','alt':'Upload test only'}]
+        check(request('/admin/product',{**update,'gallery':gallery})[0]==200,'gallery saved')
+        public_product=next(p for p in request('/catalog')[1]['products'] if p['id']=='peanuts')
+        check(public_product['gallery']==gallery,'ordered gallery reaches shop API')
+        check('gallery_json' not in public_product,'raw gallery storage not exposed')
+        check(request('/admin/product',{**update,'gallery':[{'image':'../../config/local.php'}]})[0]==422,'gallery path traversal rejected')
+        check(request('/admin/product',{**update,'gallery':[{'image':'https://attacker.example/image.webp'}]})[0]==422,'remote gallery URL rejected')
+        check(request('/admin/product',{**update,'gallery':[{'image':'assets/missing.webp'}]})[0]==422,'missing gallery image rejected')
+        check(request('/admin/product',{**update,'gallery':gallery*5})[0]==422,'gallery size bounded')
+        check(request('/admin/product',{**update,'gallery':[gallery[0],gallery[0]]})[0]==422,'duplicate gallery image rejected')
+        check(request('/admin/product',{**update,'gallery':{'bad':'shape'}})[0]==422,'gallery must be list')
+        check(request('/admin/product',{**update,'gallery':list(reversed(gallery))})[0]==200,'gallery reordered')
+        check(next(p for p in request('/catalog')[1]['products'] if p['id']=='peanuts')['gallery']==list(reversed(gallery)),'gallery order persisted')
+        check(request('/admin/product',{**update,'gallery':[]})[0]==200,'gallery photos removed')
+        for page in ['pantry','roots','next','reviews','contact']:
+            with opener.open(base+page+'.html') as response:
+                html=response.read().decode()
+                check(response.status==200 and 'data-page="'+page+'"' in html,'separate '+page+' page serves')
+
         check(request('/cart/quote', {'items':[{'variant_id':'guntur-gold-500','quantity':2}],'pincode':'530028'})[0] == 200, 'confirmed existing product quote')
         check(request('/admin/variant', {'id':'peanuts-500','price_paise':10000,'stock':10,'active':1,'expected_stock':0,'price_confirmed':1})[0] == 200, 'prepare coming soon stock')
         check(request('/cart/quote', {'items':[{'variant_id':'peanuts-500','quantity':1}],'pincode':'530028'})[0] == 409, 'coming soon is server blocked')
@@ -179,6 +198,7 @@ with tempfile.TemporaryDirectory(prefix='yuganth-http-', dir=temp_root) as temp:
             check(request('/admin/product',{**newproduct,'image':image['image']})[0]==200,'uploaded image assigned')
         finally:imagefile.unlink(missing_ok=True)
         status,result=request('/auth/login',{'email':'other@example.com','password':'another-password-123'});csrf=result['csrf']
+        check(request('/admin/product',{**update,'gallery':gallery})[0]==403,'customer cannot modify gallery')
         check(request('/admin/variant/create',pack)[0]==403,'customer cannot create pack sizes')
         check(request('/admin/reviews')[0]==403,'customer cannot inspect moderation queue')
         check(request('/admin/review',{'id':pending['id'],'status':'approved'})[0]==403,'customer cannot publish review')

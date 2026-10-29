@@ -159,10 +159,21 @@ try {
             if(!preg_match('~^(assets/[a-z0-9-]+\.(?:png|jpg|jpeg|webp)|media/[a-f0-9]{32}\.webp)$~D',$image)||!is_file(dirname(__DIR__).'/'.$image))throw new ApiError(422,'Choose an existing product image or upload one.');
             $bg=$input['theme_color']??($old['theme_color']??'#245544');$ink=$input['text_color']??($old['text_color']??'#f6f0df');$type=text($input['product_type']??($old['product_type']??''),80,'product type',0);
             if(!is_string($bg)||!is_string($ink)||!preg_match('/^#[a-f0-9]{6}$/iD',$bg)||!preg_match('/^#[a-f0-9]{6}$/iD',$ink))throw new ApiError(422,'Use six-digit hex colours.');
-            transaction(function()use($id,$name,$description,$origin,$category,$status,$active,$u,$image,$bg,$ink,$type){
+            $gallery=$input['gallery']??json_decode($old['gallery_json']??'[]',true);
+            if(!is_array($gallery)||!array_is_list($gallery)||count($gallery)>8)throw new ApiError(422,'Add up to eight extra product photos.');
+            $clean=[];$seen=[];
+            foreach($gallery as $photo){
+                if(!is_array($photo))throw new ApiError(422,'Invalid product photo.');
+                $path=text($photo['image']??null,255,'gallery image');$alt=text($photo['alt']??'',120,'photo description',0);
+                if(!preg_match('~^(assets/[a-z0-9-]+\.(?:png|jpg|jpeg|webp)|media/[a-f0-9]{32}\.webp)$~D',$path)||!is_file(dirname(__DIR__).'/'.$path))throw new ApiError(422,'Upload a product photo or choose an existing image.');
+                if(isset($seen[$path]))throw new ApiError(422,'Each extra photo must be different.');$seen[$path]=true;$clean[]=['image'=>$path,'alt'=>$alt];
+            }
+            $galleryJson=json_encode($clean,JSON_THROW_ON_ERROR);
+            transaction(function()use($id,$name,$description,$origin,$category,$status,$active,$u,$image,$bg,$ink,$type,$galleryJson){
                 $exists=one('SELECT id FROM products WHERE id=?'.\Yuganth\lockSuffix(),[$id]);
                 if($exists)query('UPDATE products SET name=?,description=?,origin=?,category=?,launch_status=?,active=?,image=?,theme_color=?,text_color=?,product_type=? WHERE id=?',[$name,$description,$origin,$category,$status,$active,$image,$bg,$ink,$type,$id]);
                 else{query('INSERT INTO products (id,name,description,origin,category,launch_status,active,image,theme_color,text_color,product_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)',[$id,$name,$description,$origin,$category,$status,$active,$image,$bg,$ink,$type]);query('INSERT INTO variants (id,product_id,weight_g,price_paise,stock,price_confirmed) VALUES (?,?,500,0,0,0)',[$id.'-500',$id]);}
+                query('UPDATE products SET gallery_json=? WHERE id=?',[$galleryJson,$id]);
                 audit('product.saved',$id,$u['id']);
             });reply(['saved'=>true]);
         }
