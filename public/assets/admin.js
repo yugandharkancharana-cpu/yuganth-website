@@ -1,4 +1,10 @@
 'use strict';
+function rupeesToPaise(value){
+ const match=/^(\d+)(?:\.(\d{1,2}))?$/.exec(String(value).trim());
+ if(!match)throw new Error('Enter a rupee amount with up to two decimal places.');
+ const amount=Number(match[1])*100+Number((match[2]||'').padEnd(2,'0'));
+ if(!Number.isSafeInteger(amount))throw new Error('Amount is too large.');return amount;
+}
 (async()=>{
  const api=YuganthAPI,message=document.querySelector('#message');const say=e=>message.textContent=e.message||String(e);
  async function refresh(){
@@ -6,8 +12,8 @@
   document.querySelector('#bannerText').value=settings.banner;document.querySelector('#bannerSpeed').value=settings.banner_speed;document.querySelector('#bannerEnabled').checked=!!Number(settings.banner_enabled);
   const tbody=document.querySelector('#variants');tbody.replaceChildren();
   for(const variant of vs.variants){const row=document.createElement('tr');const label=document.createElement('td');label.textContent=variant.name+' · '+variant.weight_g+' g';row.append(label);const fields={};
-   for(const [key,min,max]of [['price_paise',0,1000000],['stock',0,1000000],['active',0,1],['price_confirmed',0,1]]){const td=document.createElement('td');const input=document.createElement('input');input.type=['active','price_confirmed'].includes(key)?'checkbox':'number';input.min=min;input.max=max;input.step='1';input.value=variant[key];if(input.type==='checkbox')input.checked=!!Number(variant[key]);input.setAttribute('aria-label',variant.id+' '+key);fields[key]=input;td.append(input);row.append(td);}
-   const cell=document.createElement('td');const save=document.createElement('button');save.textContent='Save';save.onclick=async()=>{save.disabled=true;try{const body={id:variant.id,expected_stock:Number(variant.stock)};for(const key in fields)body[key]=fields[key].type==='checkbox'?(fields[key].checked?1:0):Number(fields[key].value);await api.request('/admin/variant',body);variant.stock=body.stock;say('Variant saved.');}catch(e){say(e)}finally{save.disabled=false}};cell.append(save);row.append(cell);tbody.append(row);
+   for(const [key,min,max]of [['price_paise',0,1000000],['stock',0,1000000],['active',0,1],['price_confirmed',0,1]]){const td=document.createElement('td');const input=document.createElement('input');input.type=['active','price_confirmed'].includes(key)?'checkbox':'number';input.min=min;input.max=key==='price_paise'?max/100:max;input.step=key==='price_paise'?'0.01':'1';input.value=key==='price_paise'?(Number(variant[key])/100).toFixed(2):variant[key];if(key==='price_paise')input.inputMode='decimal';if(input.type==='checkbox')input.checked=!!Number(variant[key]);input.setAttribute('aria-label',variant.id+' '+(key==='price_paise'?'price in rupees':key));fields[key]=input;td.append(input);row.append(td);}
+   const cell=document.createElement('td');const save=document.createElement('button');save.textContent='Save';save.onclick=async()=>{save.disabled=true;try{const body={id:variant.id,expected_stock:Number(variant.stock)};for(const key in fields)body[key]=fields[key].type==='checkbox'?(fields[key].checked?1:0):key==='price_paise'?rupeesToPaise(fields[key].value):Number(fields[key].value);if(!Object.values(fields).every(field=>field.reportValidity()))return;await api.request('/admin/variant',body);variant.stock=body.stock;say('Variant saved.');}catch(e){say(e)}finally{save.disabled=false}};cell.append(save);row.append(cell);tbody.append(row);
   }
   const productHolder=document.querySelector('#productsAdmin');productHolder.replaceChildren();
   for(const product of [{id:'',name:'',description:'',origin:'',category:'spices',launch_status:'coming_soon',active:1,image:'assets/guntur-gold-cutout.webp',product_type:'',theme_color:'#245544',text_color:'#f6f0df'},...ps.products]){
@@ -29,6 +35,6 @@
   }
  }
  document.querySelector('#banner').onsubmit=async e=>{e.preventDefault();try{await api.request('/admin/banner',{value:document.querySelector('#bannerText').value,speed:Number(document.querySelector('#bannerSpeed').value),enabled:document.querySelector('#bannerEnabled').checked?1:0});say('Banner saved.');}catch(e){say(e)}};
- document.querySelector('#couponForm').onsubmit=async e=>{e.preventDefault();try{const f=new FormData(e.target),body={code:f.get('code'),starts_at:Math.floor(new Date(f.get('starts')).getTime()/1000),ends_at:Math.floor(new Date(f.get('ends')).getTime()/1000),active:f.has('active')?1:0};for(const k of ['percent','minimum_paise','max_discount_paise','usage_limit'])body[k]=Number(f.get(k));await api.request('/admin/coupon',body);await refresh();say('Coupon saved.');}catch(e){say(e)}};
+ document.querySelector('#couponForm').onsubmit=async e=>{e.preventDefault();try{const f=new FormData(e.target),body={code:f.get('code'),starts_at:Math.floor(new Date(f.get('starts')).getTime()/1000),ends_at:Math.floor(new Date(f.get('ends')).getTime()/1000),active:f.has('active')?1:0};for(const k of ['percent','usage_limit'])body[k]=Number(f.get(k));for(const k of ['minimum_paise','max_discount_paise'])body[k]=rupeesToPaise(f.get(k));await api.request('/admin/coupon',body);await refresh();say('Coupon saved.');}catch(e){say(e)}};
  try{const s=await api.session();if(s.user?.role!=='admin')throw new Error('Sign in with an administrator account to manage this store.');await refresh();document.querySelector('#admin').hidden=false;}catch(e){say(e)}
 })();
