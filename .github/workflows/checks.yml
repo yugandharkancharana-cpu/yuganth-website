@@ -20,6 +20,8 @@ jobs:
         run: php tests/razorpay.php
       - name: Razorpay browser flow
         run: node tests/razorpay-browser.cjs
+      - name: Reset email safety
+        run: php tests/reset-email.php
       - name: Database upgrade
         run: php tests/migration.php
       - name: HTTP integration

@@ -17,3 +17,4 @@ __pycache__/
 !/public/media/.gitkeep
 
 /config/razorpay.local.php
+/config/mail.local.php

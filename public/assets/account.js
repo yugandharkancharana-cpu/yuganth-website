@@ -1,10 +1,14 @@
 'use strict';
 (async()=>{
+  const embedded=new URLSearchParams(location.search).get('embed')==='1';if(embedded)document.body.classList.add('embedded-account');
+  function tab(create){document.querySelector('#signInPanel').hidden=create;document.querySelector('#signUpPanel').hidden=!create;document.querySelector('#signInTab').setAttribute('aria-selected',String(!create));document.querySelector('#signUpTab').setAttribute('aria-selected',String(create));}
+  document.querySelector('#signInTab').onclick=()=>tab(false);document.querySelector('#signUpTab').onclick=()=>tab(true);
+  for(const [id,create]of [['signInTab',false],['signUpTab',true]])document.getElementById(id).onkeydown=e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();tab(!create);document.getElementById(create?'signInTab':'signUpTab').focus();}};
   const api=YuganthAPI,message=document.querySelector('#message');let current=null;
   const say=e=>message.textContent=e.message||String(e);
   async function refresh(){
-    const s=await api.session();current=s.user;document.querySelector('#auth').hidden=!!current;document.querySelector('#profile').hidden=!current;
-    if(!current)return;
+    const s=await api.session();current=s.user;document.querySelector('#auth').hidden=!!current||location.hash.startsWith('#reset=');document.querySelector('#profile').hidden=!current;
+    if(!current)return;if(embedded){parent.postMessage({type:'yuganth-signed-in'},location.origin);return;}
     document.querySelector('#greeting').textContent='Welcome, '+current.name+'.';document.querySelector('#adminLink').hidden=current.role!=='admin';
     const {orders}=await api.request('/orders');const holder=document.querySelector('#orders');holder.replaceChildren();
     if(!orders.length)holder.textContent='Your first flavour is waiting. No orders yet.';
@@ -21,6 +25,6 @@
   document.querySelector('#forgot').onclick=async()=>{try{const email=document.querySelector('#loginEmail').value;if(!email)throw new Error('Enter your email in the sign-in form first.');const result=await api.request('/auth/forgot',{email});say(result.message);}catch(e){say(e)}};
   document.querySelector('#addressForm').onsubmit=async e=>{e.preventDefault();try{await api.request('/addresses',{address:Object.fromEntries(new FormData(e.target))});e.target.reset();await refresh();say('Address saved.');}catch(e){say(e)}};
   const token=location.hash.startsWith('#reset=')?location.hash.slice(7):'';
-  if(token){document.querySelector('#reset').hidden=false;document.querySelector('#reset').onsubmit=async e=>{e.preventDefault();try{await api.request('/auth/reset',{token,password:new FormData(e.target).get('password')});e.target.reset();document.querySelector('#reset').hidden=true;history.replaceState(null,'','account.html');await refresh();say('Password changed. Please sign in.');}catch(e){say(e)}};}
+  if(token){document.querySelector('#auth').hidden=true;document.querySelector('#reset').hidden=false;document.querySelector('#reset').onsubmit=async e=>{e.preventDefault();try{await api.request('/auth/reset',{token,password:new FormData(e.target).get('password')});e.target.reset();document.querySelector('#reset').hidden=true;history.replaceState(null,'','account.html');await refresh();say('Password changed. Please sign in.');}catch(e){say(e)}};}
   try{await refresh();}catch(e){say(e)}
 })();

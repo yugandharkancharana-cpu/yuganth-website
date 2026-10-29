@@ -10,3 +10,10 @@ DirectoryIndex index.html
     Header always set Referrer-Policy "same-origin"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
 </IfModule>
+<Files "account.html">
+    <IfModule mod_headers.c>
+        # The account popup is embedded only by this same website.
+        Header always set X-Frame-Options "SAMEORIGIN"
+        Header always set Content-Security-Policy "frame-ancestors 'self'"
+    </IfModule>
+</Files>

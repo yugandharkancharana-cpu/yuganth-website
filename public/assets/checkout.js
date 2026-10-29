@@ -3,6 +3,8 @@
   const api = YuganthAPI, form = document.querySelector('#checkoutForm'), message = document.querySelector('#message'), place = document.querySelector('#place');
   let lines = YuganthCart.read(), enabled = false, loggedIn = false, quoteFingerprint = '', pending = null;
   if (!lines.length) { message.textContent = 'Your bag is empty. Return to the collection to add products.'; return; }
+  async function syncIdentity(){const s=await api.session();enabled=s.checkout_enabled;loggedIn=!!s.user;document.querySelector('#checkoutIdentity').textContent=s.user?'Signed in as '+s.user.name:'Sign in to save your order.';document.querySelector('#checkoutSignIn').hidden=loggedIn;place.disabled=!(enabled&&loggedIn&&quoteFingerprint===JSON.stringify(payload()));if(loggedIn)message.textContent='Signed in. Check delivery and review your total.';}
+  document.addEventListener('yuganth-auth-changed',()=>syncIdentity().catch(e=>message.textContent=e.message));
   const payload = () => { const data = Object.fromEntries(new FormData(form)); return { items: lines.map(x => ({ variant_id: x.variant_id, quantity: x.quantity })), address: { name:data.name,phone:data.phone,line1:data.line1,line2:data.line2,city:data.city,state:data.state,pincode:data.pincode }, coupon:data.coupon }; };
   function showTotal(data) { const total = document.querySelector('#totals'); total.replaceChildren(); for (const [label,key] of [['Subtotal','subtotal_paise'],['Discount','discount_paise'],['Delivery','shipping_paise'],['Total','total_paise']]) { const row = document.createElement('div'); row.className='line-row'; row.textContent = label + ': ' + api.money(data[key]); total.append(row); } }
   form.addEventListener('input', () => { place.disabled = true; quoteFingerprint = ''; pending = null; document.querySelector('#payment').replaceChildren(); });
@@ -34,6 +36,7 @@
   };
   try {
     const [s,catalog]=await Promise.all([api.session(),api.request('/catalog')]);enabled=s.checkout_enabled;loggedIn=!!s.user;
+    document.querySelector('#checkoutIdentity').textContent=s.user?'Signed in as '+s.user.name:'Sign in to save your order.';document.querySelector('#checkoutSignIn').hidden=loggedIn;
     const variants=new Map();for(const p of catalog.products)for(const v of p.variants)variants.set(v.id,{product:p,variant:v});
     const summary=document.querySelector('#summary');summary.replaceChildren();let invalid=false;
     for(const line of lines){const entry=variants.get(line.variant_id);const div=document.createElement('div');div.className='line-row';

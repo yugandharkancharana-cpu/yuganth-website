@@ -166,6 +166,17 @@ try {
                 audit('product.saved',$id,$u['id']);
             });reply(['saved'=>true]);
         }
+        if($method==='POST'&&$route==='/admin/variant/create'){
+            $product=text($input['product_id']??null,40,'product');$weight=integer($input['weight_g']??null,1,25000,'weight in grams');
+            $price=integer($input['price_paise']??0,0,1000000,'price');$stock=integer($input['stock']??0,0,1000000,'stock');$confirmed=integer($input['price_confirmed']??0,0,1,'price confirmation');
+            if($confirmed&&$price<=0)throw new ApiError(422,'A confirmed price must be greater than zero.');
+            $id=$product.'-'.$weight;
+            transaction(function()use($product,$weight,$price,$stock,$confirmed,$id,$u){
+                $p=one('SELECT id FROM products WHERE id=?'.\Yuganth\lockSuffix(),[$product]);if(!$p||$product==='pure-gold')throw new ApiError(422,'Choose a current product.');
+                if(one('SELECT id FROM variants WHERE product_id=? AND weight_g=?',[$product,$weight]))throw new ApiError(409,'This pack size already exists. Edit its price and stock below.');
+                query('INSERT INTO variants (id,product_id,weight_g,price_paise,stock,active,price_confirmed) VALUES (?,?,?,?,?,1,?)',[$id,$product,$weight,$price,$stock,$confirmed]);audit('variant.created',$id,$u['id']);
+            });reply(['saved'=>true,'id'=>$id]);
+        }
         if($method==='GET'&&$route==='/admin/variants')reply(['variants'=>rows('SELECT v.*,p.name FROM variants v JOIN products p ON p.id=v.product_id ORDER BY v.id')]);
         if($method==='POST'&&$route==='/admin/variant'){
             $id=text($input['id']??null,60,'variant');$price=integer($input['price_paise']??null,0,1000000,'price');$stock=integer($input['stock']??null,0,1000000,'stock');$active=integer($input['active']??1,0,1,'active');$expected=integer($input['expected_stock']??null,0,1000000,'previous stock');$confirmed=integer($input['price_confirmed']??0,0,1,'price confirmation');

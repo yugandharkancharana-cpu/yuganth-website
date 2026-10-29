@@ -102,6 +102,18 @@ with tempfile.TemporaryDirectory(prefix='yuganth-http-', dir=temp_root) as temp:
             conn.execute("UPDATE users SET role='admin' WHERE email='test@example.com'")
             conn.commit()
         check(request('/admin/orders')[0] == 200, 'admin order access')
+        pack={'product_id':'guntur-gold','weight_g':1000,'price_paise':45000,'stock':7,'price_confirmed':1}
+        check(request('/admin/variant/create',pack,token=False)[0]==419,'pack creation CSRF enforced')
+        check(request('/admin/variant/create',pack)[0]==200,'create 1kg pack')
+        check(request('/admin/variant/create',pack)[0]==409,'duplicate pack rejected')
+        check(request('/admin/variant/create',{**pack,'weight_g':0})[0]==422,'zero weight rejected')
+        check(request('/admin/variant/create',{**pack,'weight_g':250.5})[0]==422,'fractional grams rejected')
+        check(request('/admin/variant/create',{**pack,'weight_g':25001})[0]==422,'oversized pack rejected')
+        check(request('/admin/variant/create',{**pack,'weight_g':250,'price_paise':0})[0]==422,'confirmed free pack rejected')
+        check(request('/admin/variant/create',{**pack,'product_id':'missing'})[0]==422,'unknown product rejected')
+        check(request('/cart/quote',{'items':[{'variant_id':'guntur-gold-1000','quantity':1}],'pincode':'530028'})[1]['subtotal_paise']==45000,'new pack server price')
+        sizes=request('/admin/variants')[1]['variants']
+        check(any(v['id']=='guntur-gold-1000' and v['stock']==7 for v in sizes),'new pack inventory persisted')
         check(request('/admin/banner', {'value':'Seasonal offer'})[0] == 200, 'admin banner write')
         check(request('/settings')[1]['banner'] == 'Seasonal offer', 'banner reaches public API')
         check(request('/admin/variant', {'id':'guntur-gold-500','price_paise':5500,'stock':5,'active':1,'expected_stock':0,'price_confirmed':1})[0] == 200, 'admin catalogue update')
@@ -167,6 +179,7 @@ with tempfile.TemporaryDirectory(prefix='yuganth-http-', dir=temp_root) as temp:
             check(request('/admin/product',{**newproduct,'image':image['image']})[0]==200,'uploaded image assigned')
         finally:imagefile.unlink(missing_ok=True)
         status,result=request('/auth/login',{'email':'other@example.com','password':'another-password-123'});csrf=result['csrf']
+        check(request('/admin/variant/create',pack)[0]==403,'customer cannot create pack sizes')
         check(request('/admin/reviews')[0]==403,'customer cannot inspect moderation queue')
         check(request('/admin/review',{'id':pending['id'],'status':'approved'})[0]==403,'customer cannot publish review')
         check(upload(png,'pack.png')[0]==403,'customer cannot upload store images')
