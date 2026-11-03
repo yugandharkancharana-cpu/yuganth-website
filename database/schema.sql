@@ -68,3 +68,5 @@ CREATE TABLE IF NOT EXISTS razorpay_orders (
  key_id VARCHAR(80) NOT NULL, state VARCHAR(20) NOT NULL, created_at BIGINT NOT NULL,
  FOREIGN KEY(order_id) REFERENCES orders(id)
 );
+
+CREATE TABLE IF NOT EXISTS user_profiles (user_id VARCHAR(32) PRIMARY KEY, first_name VARCHAR(60) NOT NULL, last_name VARCHAR(60) NOT NULL, phone VARCHAR(10) NOT NULL);

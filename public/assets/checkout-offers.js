@@ -1,0 +1,2 @@
+'use strict';
+(async()=>{const box=document.querySelector('#checkoutOffer');try{const s=await YuganthAPI.request('/settings');if(!Number(s.checkout_banner_enabled))return;const track=box.querySelector('.offer-track');for(let i=0;i<4;i++){const span=document.createElement('span');span.textContent=s.checkout_banner+'  ✳  ';if(i)span.setAttribute('aria-hidden','true');track.append(span);}track.style.animationDuration=s.banner_speed+'s';box.hidden=false;}catch{box.hidden=true;}})();

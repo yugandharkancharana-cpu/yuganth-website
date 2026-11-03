@@ -94,6 +94,28 @@ try {
             query('DELETE FROM password_resets WHERE user_id=?',[$r['user_id']]);
         });reply(['message'=>'Password changed. Please sign in.']);
     }
+    if ($route==='/profile') {
+        $u=user();
+        if($method==='GET') {
+            $p=one('SELECT first_name,last_name,phone FROM user_profiles WHERE user_id=?',[$u['id']]);
+            $parts=explode(' ',trim($u['name']),2);
+            reply(['profile'=>$p??['first_name'=>$parts[0],'last_name'=>$parts[1]??'','phone'=>''],'email'=>$u['email']]);
+        }
+        if($method!=='POST')throw new ApiError(405,'Method not allowed.');
+        $first=text($input['first_name']??null,60,'first name');
+        if(!is_string($input['last_name']??'')||!is_string($input['phone']??''))throw new ApiError(422,'Enter valid profile details.');
+        $last=trim($input['last_name']??'');
+        if(strlen($last)>60)throw new ApiError(422,'Last name is too long.');
+        $phone=trim((string)($input['phone']??''));
+        if(!preg_match('/^[6-9][0-9]{9}$/D',$phone))throw new ApiError(422,'Enter a valid 10-digit Indian mobile number.');
+        $name=text(trim($first.' '.$last),120,'name');
+        transaction(function()use($u,$first,$last,$phone,$name){
+            query('DELETE FROM user_profiles WHERE user_id=?',[$u['id']]);
+            query('INSERT INTO user_profiles (user_id,first_name,last_name,phone) VALUES (?,?,?,?)',[$u['id'],$first,$last,$phone]);
+            query('UPDATE users SET name=? WHERE id=?',[$name,$u['id']]);
+        });
+        reply(['saved'=>true]);
+    }
     if ($route==='/addresses') {
         $u=user();
         if($method==='GET')reply(['addresses'=>array_map(fn($r)=>['id'=>$r['id'],'address'=>json_decode($r['payload'],true)],rows('SELECT * FROM addresses WHERE user_id=?',[$u['id']]))]);
