@@ -29,3 +29,28 @@
 .hero-art .hero-tilt img {
   filter: drop-shadow(2px 4px 4px #081a1559) drop-shadow(16px 24px 17px #071d168c);
 }
+
+/* Keep the headline and product in proportion across screen sizes. */
+@media (min-width: 801px) {
+  .hero-copy h1 { font-size: clamp(78px, 8.1vw, 148px); }
+  .hero-art .hero-tilt { width: 72%; max-width: 390px; }
+  .hero-art .hero-disc { inset: 15% auto auto 14%; width: 74%; }
+}
+
+@media (max-width: 600px) {
+  .hero-copy h1 { font-size: clamp(46px, 12vw, 72px); }
+  .hero-art { min-height: clamp(290px, 90vw, 365px); }
+  .hero-art .hero-tilt { height: clamp(290px, 90vw, 365px); }
+  .hero-art .hero-disc { top: 12%; left: 12%; width: 76%; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-art .orbit { animation: hero-orbit-drift 11s ease-in-out infinite alternate; }
+  .hero-art .orbit-two { animation-duration: 15s; animation-direction: alternate-reverse; }
+  @keyframes hero-orbit-drift {
+    from { rotate: -3deg; }
+    to { rotate: 3deg; }
+  }
+  .hero-art .art-plus { transition: filter 250ms ease; }
+  .hero-art:hover .art-plus { filter: drop-shadow(0 0 10px #d5a64788); }
+}
