@@ -148,6 +148,8 @@ function fulfillOrder(string $id, string $status, string $tracking, string $acto
         $o=one('SELECT * FROM orders WHERE id=?'.lockSuffix(),[$id]);
         if (!$o) throw new ApiError(404,'Order not found.');
         if (($status==='shipped' && $o['status']!=='processing') || ($status==='delivered' && $o['status']!=='shipped')) throw new ApiError(409,'Invalid order status transition.');
+        $address = json_decode($o['address'], true);
+        if (isset($address['distributor']) && empty($address['distributor']['reviewed_at'])) throw new ApiError(409, 'Verify the distributor phone quote before dispatch.');
         query('UPDATE orders SET status=?,tracking_url=? WHERE id=?',[$status,$status==='shipped'?$tracking:$o['tracking_url'],$id]);
         audit('order.'.$status,$id,$actor);queue('order.'.$status,['order_id'=>$id,'user_id'=>$o['user_id']]);
     });

@@ -1,0 +1,8 @@
+.bulk-line{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem;margin:0 0 1rem;padding:1rem;border:1px solid #d7d1c4;border-radius:8px}
+.bulk-line legend{padding:0 .4rem}.bulk-line button{justify-self:start;grid-column:1/-1}
+.bulk-check{display:flex;gap:.65rem;align-items:flex-start;margin:1rem 0}.bulk-check input{width:auto!important;min-height:0!important;margin:.3rem 0!important}
+.bulk-admin-form{display:flex;align-items:end;flex-wrap:wrap;gap:1rem;border-bottom:1px solid #ddd8ca;padding:.75rem 0}.bulk-admin-form input[type=number]{width:9rem}
+.bulk-admin-form .bulk-check{margin:0}.bulk-order{padding:1rem 0;border-bottom:1px solid #ddd8ca;overflow-wrap:anywhere}
+#bulkReceipt{overflow-wrap:anywhere}#bulkTotals{font-weight:600}
+@media(max-width:640px){.bulk-line{grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem}}
+@media(max-width:360px){.bulk-line{grid-template-columns:1fr}}

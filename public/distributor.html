@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Distributor orders · Yuganth</title><link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/commerce.css"><link rel="stylesheet" href="assets/distributor.css">
+<script defer src="assets/api.js"></script><script defer src="assets/razorpay-guest.js"></script><script defer src="assets/distributor.js"></script>
+</head><body class="commerce-page"><header class="commerce-header"><a class="commerce-brand" href="index.html">YUGANTH</a><a href="index.html#range">The pantry</a></header>
+<main class="commerce-main" id="distributorCheckout">
+<h1>Distributor orders</h1><p>Agree on the products, packing and price with Yuganth by phone before ordering. <a href="tel:+919618423344">Call +91 96184 23344</a>.</p>
+<p id="message" class="commerce-message" role="status" aria-live="polite"></p>
+<form id="bulkForm" hidden>
+<section class="commerce-panel"><h2>Products and packing</h2><div id="bulkLines"></div><button type="button" id="addBulkLine">Add another product</button></section>
+<section class="commerce-panel"><h2>Business and delivery details</h2><div class="form-grid">
+<label>Business name<input name="company" maxlength="150" autocomplete="organization" required></label>
+<label>Recipient name<input name="name" maxlength="120" autocomplete="name" required></label>
+<label>Email<input name="email" type="email" maxlength="200" autocomplete="email" required></label>
+<label>Mobile number (+91)<input name="phone" type="tel" pattern="[6-9][0-9]{9}" autocomplete="tel-national" required></label>
+<label>GSTIN (optional)<input name="gstin" maxlength="15"></label>
+<label>House or unit number and street<input name="line1" maxlength="200" autocomplete="address-line1" required></label>
+<label>Area or landmark (optional)<input name="line2" maxlength="200" autocomplete="address-line2"></label>
+<label>City or town<input name="city" maxlength="100" autocomplete="address-level2" required></label>
+<label>State or union territory<input name="state" maxlength="100" autocomplete="address-level1" required></label>
+<label>PIN code<input name="pincode" inputmode="numeric" pattern="[1-9][0-9]{5}" autocomplete="postal-code" required></label>
+</div></section>
+<section class="commerce-panel"><h2>Agreed price</h2>
+<label for="bulkPrice">Total agreed by phone before GST (₹)</label><input id="bulkPrice" name="agreed" inputmode="decimal" pattern="[0-9]{1,7}(\.[0-9]{1,2})?" placeholder="10000.00" required>
+<p id="bulkTotals" aria-live="polite"></p><p>Yuganth will contact you to arrange delivery separately. This payment excludes delivery charges.</p>
+<label class="bulk-check"><input type="checkbox" name="accepted" required> <span>I confirm the price and order details agreed by phone and accept the <a href="terms-and-conditions.html" target="_blank" rel="noopener">Terms &amp; Conditions</a>. See our <a href="privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+<button type="submit">Review order and pay</button></section>
+</form>
+<section class="commerce-panel" id="bulkPayment" hidden><h2>Distributor payment</h2><div id="bulkReceipt"></div><button id="bulkPay" type="button">Open secure Razorpay payment</button><button id="bulkNew" type="button" hidden>Start another order</button></section>
+</main></body></html>
