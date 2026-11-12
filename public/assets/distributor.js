@@ -125,7 +125,7 @@
   }
 
   async function admin() {
-    const status = $('#bulkAdminStatus'), productsBox = $('#bulkAdminProducts'), ordersBox = $('#bulkAdminOrders');
+    const status = $('#bulkAdminStatus'), productsBox = $('#bulkAdminProducts');
     const {products} = await request('/admin/products');
     productsBox.replaceChildren();
     for (const product of products) {
@@ -142,32 +142,135 @@
         finally { save.disabled = false; }
       };
     }
-    const {orders} = await request('/admin/orders');
-    ordersBox.replaceChildren();
-    if (!orders.length) node('p', 'No distributor orders yet.', ordersBox);
-    for (const order of orders) {
-      const item = node('article', undefined, ordersBox); item.className = 'bulk-order';
-      const reviewed = order.address.distributor.reviewed_at;
-      node('h4', order.status === 'processing' ? (reviewed ? 'Paid · Phone quote verified' : 'Paid · Check phone quote') : order.status.replaceAll('_', ' '), item);
-      describe(order, item);
-      if (order.status !== 'processing' || reviewed) continue;
-      const form = node('form', undefined, item);
-      const amount = field(form, 'Original phone quote before GST (₹)', input('text', 'quote', '', '')); amount.inputMode = 'decimal';
-      const review = node('button', 'Confirm phone quote', form);
+  }
+
+  async function orderWorkspace() {
+    const status = $('#bulkAdminStatus'), type = $('#orderType'), filter = $('#orderStatus');
+    const search = $('#orderSearch'), holder = $('#bulkAdminOrders'), reload = $('#reloadOrders');
+    const dispatch = $('#normalDispatch');
+    const labels = {pending_payment:'Pending payment', processing:'Paid', shipped:'Shipped', delivered:'Delivered', cancelled:'Cancelled', expired:'Expired'};
+    let orders = [], shipments = new Map(), shippingEnabled = false, loadVersion = 0;
+
+    function actionForm(card, label, action) {
+      const form = node('form', undefined, card);
+      const button = node('button', label);
       form.onsubmit = async event => {
-        event.preventDefault(); review.disabled = true;
-        try { await request('/admin/reconcile', {id:order.id, agreed:amount.value}); await admin(); status.textContent = 'Phone quote verified. Arrange delivery with your chosen carrier.'; }
+        event.preventDefault(); button.disabled = true;
+        try { const message = await action(); await load(); status.textContent = message; }
         catch (error) { status.textContent = error.message; }
-        finally { review.disabled = false; }
+        finally { button.disabled = false; }
       };
+      return {form, button};
     }
+
+    function showDispatch(order, card) {
+      const details = shipments.get(order.id);
+      if (!details) return;
+      const section = node('details', undefined, card);
+      node('summary', 'Shiprocket dispatch', section);
+      const state = details.shipment;
+      if (state.status !== 'not_sent') {
+        node('p', `${state.status.replaceAll('_',' ')}${state.order_id ? ' · Shiprocket ' + state.order_id : ''}`, section);
+        return;
+      }
+      const {form,button} = actionForm(section, 'Send prepaid order to Shiprocket', async () => {
+        const parcel = Object.fromEntries([...new FormData(form)].map(([key,value]) => [key,Number(value)]));
+        const {shipment} = await YuganthAPI.request('/admin/shiprocket/send', {id:order.id, parcel});
+        return `Sent to Shiprocket. Order ${shipment.order_id}.`;
+      });
+      for (const [key,label] of [['length','Length (cm)'],['breadth','Width (cm)'],['height','Height (cm)'],['weight','Packed weight (kg)']]) {
+        const element = field(form,label,input('number',key,key === 'weight' ? 0.001 : 0.501,key === 'weight' ? 100 : 300));
+        element.step = '0.001'; element.value = details.parcel?.[key] ?? '';
+      }
+      if (!shippingEnabled) node('p','Shiprocket is disabled in the store configuration.',form);
+      button.disabled = !shippingEnabled; form.append(button);
+    }
+
+    function render() {
+      const bulk = type.value === 'bulk', wanted = filter.value, term = search.value.trim().toLowerCase();
+      holder.replaceChildren();
+      const visible = orders.filter(order => {
+        const address = order.address || {}, reviewed = !!address.distributor?.reviewed_at;
+        const matches = !wanted || wanted === order.status || (order.status === 'processing' && (wanted === 'review' && !reviewed || wanted === 'accepted' && reviewed));
+        return matches && [order.id,address.name,address.phone,address.distributor?.company].join(' ').toLowerCase().includes(term);
+      });
+      $('#orderCount').textContent = `${visible.length} of ${orders.length} recent ${bulk ? 'bulk' : 'normal'} orders`;
+      if (!visible.length) node('p','No matching orders.',holder);
+      for (const order of visible) {
+        const card = node('article', undefined, holder); card.className = 'bulk-order';
+        const details = order.address?.distributor, reviewed = !!details?.reviewed_at;
+        node('h3', bulk && order.status === 'processing' ? (reviewed ? 'Paid · Phone quote accepted' : 'Paid · Awaiting quote confirmation') : labels[order.status] || order.status, card);
+        node('p',new Date(Number(order.created_at)*1000).toLocaleString('en-IN'),card);
+        if (bulk) describe(order,card);
+        else {
+          node('p',`Reference: ${order.id} · ${money(order.total_paise)}`,card);
+          const a = order.address || {};
+          node('p',[a.name,a.phone,a.line1,a.line2,a.city,a.state,a.pincode].filter(Boolean).join(' · '),card);
+        }
+        if (bulk && order.status === 'processing' && !reviewed) {
+          const {form,button} = actionForm(card,'Accept bulk order',async () => {
+            await request('/admin/reconcile',{id:order.id,agreed:form.elements.quote.value});
+            return 'Phone quote accepted. Arrange bulk delivery with your chosen carrier.';
+          });
+          const amount = field(form,'Original phone quote before GST (₹)',input('text','quote','',''));
+          amount.inputMode = 'decimal'; form.append(button);
+          continue;
+        }
+        if (!bulk && order.status === 'processing') showDispatch(order,card);
+        const next = {pending_payment:'cancelled',processing:'shipped',shipped:'delivered'}[order.status];
+        if (!next) continue;
+        const {form,button} = actionForm(card,{cancelled:'Cancel unpaid reservation',shipped:'Mark shipped',delivered:'Mark delivered'}[next],async () => {
+          await YuganthAPI.request('/admin/order',{id:order.id,status:next,tracking_url:form.elements.tracking?.value || ''});
+          return 'Order status saved.';
+        });
+        if (next === 'shipped') field(form,'Tracking URL',input('url','tracking','','')).placeholder = 'https://';
+        form.append(button);
+      }
+    }
+
+    async function load() {
+      const version = ++loadVersion, bulk = type.value === 'bulk';
+      reload.disabled = true;
+      holder.replaceChildren(); $('#orderCount').textContent = 'Loading orders…';
+      dispatch.textContent = '';
+      try {
+        const data = await request(bulk ? '/admin/orders' : '/admin/normal-orders');
+        if (version !== loadVersion) return;
+        orders = data.orders; shipments = new Map(); shippingEnabled = false;
+        if (!bulk) {
+          try {
+            const data = await request('/admin/normal-dispatch');
+            if (version !== loadVersion) return;
+            shippingEnabled = data.enabled;
+            shipments = new Map(data.orders.map(order => [order.id,order]));
+          } catch (error) { if (version === loadVersion) dispatch.textContent = `Shiprocket: ${error.message}`; }
+        }
+        if (version === loadVersion) { status.textContent = ''; render(); }
+      } catch (error) {
+        if (version === loadVersion) { orders = []; $('#orderCount').textContent = ''; status.textContent = error.message; }
+      } finally { if (version === loadVersion) reload.disabled = false; }
+    }
+    const session = await YuganthAPI.session();
+    if (session.user?.role !== 'admin') throw new Error('Sign in with an administrator account to view orders.');
+    const adminSession = await request('/admin/products');
+    if (!adminSession.csrf) throw new Error('Refresh your admin session.');
+    function switchType() {
+      const bulk = type.value === 'bulk';
+      for (const option of filter.options) if (['review','accepted'].includes(option.value)) option.hidden = !bulk;
+      filter.value = ''; orders = []; load();
+    }
+    type.value = new URLSearchParams(location.search).get('type') === 'bulk' ? 'bulk' : 'normal';
+    $('#orderWorkspace').hidden = false;
+    type.onchange = switchType; filter.onchange = render; search.oninput = render; reload.onclick = load;
+    switchType();
   }
   if ($('#distributorCheckout')) checkout().catch(error => { $('#message').textContent = error.message; });
   const refresh = $('#bulkAdminRefresh');
   if (refresh) refresh.onclick = async () => {
     refresh.disabled = true;
-    try { await admin(); $('#bulkAdminStatus').textContent = 'Distributor products and orders loaded.'; }
+    try { await admin(); $('#bulkAdminStatus').textContent = 'Distributor products loaded.'; }
     catch (error) { $('#bulkAdminStatus').textContent = error.message; }
     finally { refresh.disabled = false; }
   };
+  if ($('#ordersAdmin')) orderWorkspace().catch(error => { $('#bulkAdminStatus').textContent = error.message; });
 })();

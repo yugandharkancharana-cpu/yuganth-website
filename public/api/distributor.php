@@ -92,6 +92,20 @@ try {
             foreach ($orders as &$order) $order['address'] = json_decode($order['address'], true, 32, JSON_THROW_ON_ERROR);
             distributorReply(['orders' => $orders]);
         }
+        if ($method === 'GET' && $route === '/admin/normal-orders') {
+            $orders = rows("SELECT id,status,address,total_paise,created_at,tracking_url FROM orders WHERE idempotency_key NOT LIKE 'dist:%' ORDER BY created_at DESC LIMIT 100");
+            foreach ($orders as &$order) $order['address'] = json_decode($order['address'], true, 32, JSON_THROW_ON_ERROR);
+            distributorReply(['orders' => $orders]);
+        }
+        if ($method === 'GET' && $route === '/admin/normal-dispatch') {
+            require_once dirname(is_file($private) ? $private : $root . '/app/bootstrap.php') . '/Shiprocket.php';
+            $orders = rows("SELECT id FROM orders WHERE status='processing' AND idempotency_key NOT LIKE 'dist:%' ORDER BY created_at DESC LIMIT 100");
+            foreach ($orders as &$order) {
+                $order['parcel'] = \Yuganth\parcelPreset(getOrder($order['id'])['items']);
+                $order['shipment'] = \Yuganth\shiprocketState($order['id']);
+            }
+            distributorReply(['orders' => $orders, 'enabled' => \Yuganth\shiprocketConfig()['enabled']]);
+        }
         if ($method === 'POST' && $route === '/admin/reconcile') {
             $id = text($input['id'] ?? null, 32, 'order reference', 32);
             $agreed = distributorAmount($input['agreed'] ?? null);
