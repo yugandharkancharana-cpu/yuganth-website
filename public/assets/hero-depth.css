@@ -1,0 +1,78 @@
+.hero-art {
+  --platform-width: min(76%, 460px);
+  --platform-top: 88%;
+  background: radial-gradient(ellipse at 51% 51%, #d5a64719, transparent 66%);
+}
+
+.hero-art .hero-disc {
+  inset: 6% 5% 10%;
+  width: auto;
+  aspect-ratio: auto;
+  background: radial-gradient(ellipse at 50% 54%, #e5bd6033, #23463835 54%, transparent 72%) !important;
+  pointer-events: none;
+}
+
+.hero-art .orbit,
+.hero-art .hero-back-word,
+.hero-art .art-plus { display: none; }
+
+.hero-platform {
+  position: absolute;
+  z-index: 1;
+  top: var(--platform-top);
+  left: 50%;
+  width: var(--platform-width);
+  height: clamp(24px, 5vw, 46px);
+  transform: translateX(-50%);
+  border-radius: 50% / 35%;
+  background: linear-gradient(100deg, #0b241c 2%, #24483a 40%, #153228 69%, #081e17 100%);
+  box-shadow: 0 14px 24px #061a13a3, inset 0 -1px #b8a47245;
+  pointer-events: none;
+}
+
+.hero-platform::before {
+  content: '';
+  position: absolute;
+  inset: -40% 0 auto;
+  height: 77%;
+  border-radius: 50%;
+  border: 1px solid #c6aa7066;
+  background: radial-gradient(ellipse at 44% 34%, #527260, #2d5142 55%, #1f3d31 100%);
+}
+
+.hero-platform::after {
+  content: '';
+  position: absolute;
+  left: 17%;
+  right: 15%;
+  top: -22%;
+  height: 37%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #071d16c4, transparent 72%);
+}
+
+.hero-art .hero-tilt {
+  height: 90%;
+  transform: translateY(-5%) rotate(calc(-3deg + var(--scroll, 0) * 6deg));
+}
+
+.hero-art .hero-tilt img {
+  animation: none;
+  filter: drop-shadow(14px 14px 14px #071d167d);
+}
+
+.motion-paused .hero-art .hero-tilt { transform: translateY(-5%) rotate(-3deg) !important; }
+
+@media (max-width: 600px) {
+  .hero-art { --platform-width: min(76%, 320px); --platform-top: 80%; }
+  .hero-art .hero-tilt { height: 340px; }
+}
+
+@media (max-width: 360px) {
+  .hero-art .hero-tilt { height: 300px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-art .hero-tilt { transform: translateY(-5%) rotate(-3deg) !important; }
+  .hero-art .hero-tilt img { transform: none; }
+}
