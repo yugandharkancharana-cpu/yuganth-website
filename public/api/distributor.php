@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__, 2);
 $private = $root . '/yuganth-app/app/bootstrap.php';
-require is_file($private) ? $private : $root . '/app/bootstrap.php';
+$bootstrap = is_file($private) ? $private : $root . '/app/bootstrap.php';
+require $bootstrap;
 
 use Yuganth\{ApiError, RazorpayGateway};
 use function Yuganth\{audit, config, confirmPayment, gateway, getOrder, integer, lockSuffix, now, one, query, rows, sessionStart, text, throttle, transaction, uid, user, validateAddress};
@@ -40,12 +41,17 @@ function distributorAmount(mixed $value): int
     return integer((int)$match[1] * 100 + (int)str_pad($match[2] ?? '', 2, '0'), 100, 700000000, 'agreed amount');
 }
 
-function distributorGateway(): RazorpayGateway
+function distributorBank(): ?array
 {
-    if (!config()['checkout_enabled'] || !config()['catalog_verified']) throw new ApiError(503, 'Payment is currently unavailable.');
-    $provider = gateway();
-    if (!$provider instanceof RazorpayGateway) throw new ApiError(503, 'Distributor payments require Razorpay.');
-    return $provider;
+    return json_decode(one("SELECT value FROM settings WHERE name='distributor_bank'")['value'] ?? 'null', true);
+}
+
+function distributorReceiptDirectory(): string
+{
+    global $bootstrap;
+    $directory = dirname($bootstrap, 2) . '/storage/distributor-receipts';
+    if (str_starts_with($directory, dirname(__DIR__) . '/')) throw new ApiError(503,'Private screenshot storage is unavailable.');
+    return $directory;
 }
 
 try {
@@ -54,7 +60,8 @@ try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     if (!is_string($route) || !in_array($method, ['GET', 'POST'], true)) throw new ApiError(404, 'Not found.');
     $input = [];
-    if ($method === 'POST') {
+    $upload = $method === 'POST' && str_ends_with($route, '/receipt');
+    if ($method === 'POST' && !$upload) {
         if (!str_starts_with(strtolower($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json')) throw new ApiError(415, 'Use application/json.');
         if (!hash_equals($_SESSION['csrf'], $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) throw new ApiError(419, 'Refresh your session and try again.');
         $raw = file_get_contents('php://input', false, null, 0, 65537);
@@ -71,6 +78,48 @@ try {
 
     if (str_starts_with($route, '/admin/')) {
         $admin = user(true);
+        if ($route === '/admin/bank' && $method === 'GET') distributorReply(['bank' => distributorBank(), 'csrf' => $_SESSION['csrf']]);
+        if ($route === '/admin/bank' && $method === 'POST') {
+            $bank = [];
+            foreach (['holder'=>120,'bank'=>120,'account'=>24,'ifsc'=>11] as $key=>$limit) $bank[$key] = text($input[$key] ?? null,$limit,$key);
+            $bank['ifsc'] = strtoupper($bank['ifsc']);
+            if (!preg_match('/^[0-9]{6,24}$/D',$bank['account']) || !preg_match('/^[A-Z]{4}0[A-Z0-9]{6}$/D',$bank['ifsc'])) throw new ApiError(422,'Check the account number and IFSC.');
+            if (($input['publish'] ?? null) !== true) throw new ApiError(422,'Confirm these details may be shared with distributors.');
+            transaction(function () use ($bank,$admin) {
+                query("DELETE FROM settings WHERE name='distributor_bank'");
+                query("INSERT INTO settings (name,value) VALUES ('distributor_bank',?)",[json_encode($bank,JSON_THROW_ON_ERROR)]);
+                audit('distributor.bank_updated','distributor_bank',$admin['id']);
+            });
+            distributorReply(['saved'=>true]);
+        }
+        if ($method === 'GET' && preg_match('~^/admin/receipt/([a-f0-9]{32})$~D',$route,$receipt)) {
+            $order = getOrder($receipt[1]);
+            $proof = $order['address']['distributor']['receipt'] ?? null;
+            if (!$proof || !preg_match('/^[a-f0-9]{32}$/D',$proof['id'])) throw new ApiError(404,'No screenshot found.');
+            $path = distributorReceiptDirectory().'/'.$proof['id'];
+            if (!is_file($path)) throw new ApiError(404,'Screenshot unavailable.');
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename="transfer-proof.'.$proof['extension'].'"');
+            readfile($path);
+            exit;
+        }
+        if ($method === 'POST' && $route === '/admin/verify-transfer') {
+            $id = text($input['id'] ?? null,32,'order reference',32);
+            $amount = distributorAmount($input['amount'] ?? null);
+            $utr = strtoupper(text($input['utr'] ?? null,40,'bank reference',6));
+            if (!preg_match('/^[A-Z0-9-]+$/D',$utr)) throw new ApiError(422,'Enter the bank transaction reference.');
+            transaction(function () use ($id,$amount,$utr,$admin) {
+                $order = one("SELECT status,total_paise,address FROM orders WHERE id=? AND idempotency_key LIKE 'dist:%'".lockSuffix(),[$id]);
+                if (!$order || $order['status'] !== 'awaiting_transfer' || $amount !== (int)$order['total_paise']) throw new ApiError(409,'Check that the credited amount matches this unpaid order.');
+                $address = json_decode($order['address'],true,32,JSON_THROW_ON_ERROR);
+                if (one('SELECT event_id FROM payment_events WHERE event_id=?',['bank:'.$utr])) throw new ApiError(409,'This bank reference was already verified for an order.');
+                query('INSERT INTO payment_events (event_id,order_id,amount_paise,created_at) VALUES (?,?,?,?)',['bank:'.$utr,$id,$amount,now()]);
+                $address['distributor']['verified_utr'] = $utr;
+                query("UPDATE orders SET status='processing',address=? WHERE id=?",[json_encode($address,JSON_THROW_ON_ERROR),$id]);
+                audit('distributor.transfer_verified',$id,$admin['id']);
+            });
+            distributorReply(['saved'=>true]);
+        }
         if ($method === 'GET' && $route === '/admin/products') distributorReply(['products' => distributorProducts(), 'csrf' => $_SESSION['csrf']]);
         if ($method === 'POST' && $route === '/admin/products') {
             $id = text($input['id'] ?? null, 47, 'product');
@@ -127,7 +176,8 @@ try {
     $owner = $_SESSION['distributor_owner'] ?? null;
     if ($method === 'POST' && $route === '/orders') {
         throttle('distributor-create', 15, 3600);
-        distributorGateway();
+        $bank = distributorBank();
+        if (!$bank) throw new ApiError(503,'Bank details are being set up. Contact Yuganth before transferring payment.');
         if (($input['accepted'] ?? null) !== true) throw new ApiError(422, 'Confirm the phone quote and purchase terms.');
         $key = $_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? '';
         if (!preg_match('/^[a-f0-9]{32}$/D', $key)) throw new ApiError(422, 'Refresh and try again.');
@@ -160,28 +210,61 @@ try {
             $lines[] = ['id' => $id, 'name' => $product['name'], 'pack' => $pack, 'grams' => integer($line['grams'] ?? null, 1, 100000, 'pack weight'), 'quantity' => integer($line['quantity'] ?? null, 1, 10000, 'quantity')];
         }
         $gst = intdiv($subtotal * $rate + 5000, 10000);
-        $address['distributor'] = ['company' => text($input['company'] ?? null, 150, 'company name'), 'email' => $email, 'gstin' => $gstin, 'lines' => $lines, 'gst_bps' => $rate, 'gst_paise' => $gst, 'terms_accepted_at' => now(), 'terms_version' => '2026-11-03'];
+        $address['distributor'] = ['company' => text($input['company'] ?? null, 150, 'company name'), 'email' => $email, 'gstin' => $gstin, 'lines' => $lines, 'gst_bps' => $rate, 'gst_paise' => $gst, 'terms_accepted_at' => now(), 'terms_version' => '2026-11-03', 'bank' => $bank];
         $id = uid();
         $owner ??= uid();
         transaction(function () use ($id, $owner, $key, $fingerprint, $address, $subtotal, $gst) {
             if (!one("SELECT id FROM users WHERE id=? AND role='guest'", [$owner])) {
                 query('INSERT INTO users (id,name,email,password_hash,role,created_at) VALUES (?,?,?,?,?,?)', [$owner, 'Distributor checkout', 'distributor-'.$owner.'@guest.yuganth.invalid', password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT), 'guest', now()]);
             }
-            query('INSERT INTO orders (id,user_id,idempotency_key,fingerprint,status,currency,subtotal_paise,discount_paise,shipping_paise,total_paise,address,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', [$id, $owner, $key, $fingerprint, 'pending_payment', 'INR', $subtotal, 0, 0, $subtotal + $gst, json_encode($address, JSON_THROW_ON_ERROR), now(), now() + 1800]);
+            query('INSERT INTO orders (id,user_id,idempotency_key,fingerprint,status,currency,subtotal_paise,discount_paise,shipping_paise,total_paise,address,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', [$id, $owner, $key, $fingerprint, 'awaiting_transfer', 'INR', $subtotal, 0, 0, $subtotal + $gst, json_encode($address, JSON_THROW_ON_ERROR), now(), now() + 1800]);
         });
         $_SESSION['distributor_owner'] = $owner;
         distributorReply(['order' => getOrder($id, $owner)], 201);
     }
 
-    if (!$owner || !preg_match('~^/orders/([a-f0-9]{32})(/payment(?:/verify)?)?$~D', $route, $match)) throw new ApiError(404, 'Distributor order not found in this session.');
+    if (!$owner || !preg_match('~^/orders/([a-f0-9]{32})(/payment/verify|/receipt)?$~D', $route, $match)) throw new ApiError(404, 'Distributor order not found in this session.');
     $order = getOrder($match[1], $owner);
     $action = $match[2] ?? '';
     if ($method === 'GET' && $action === '') distributorReply(['order' => $order]);
-    if ($method === 'POST' && $action === '/payment') {
-        throttle('distributor-payment', 30, 3600);
-        distributorReply(['checkout' => distributorGateway()->createCheckout($order)]);
+    if ($upload && $action === '/receipt') {
+        throttle('distributor-receipt', 12, 3600);
+        if (!hash_equals($_SESSION['csrf'], $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) throw new ApiError(419,'Refresh your session.');
+        if ($order['status'] !== 'awaiting_transfer') throw new ApiError(409,'This order is no longer awaiting a transfer.');
+        $utr = strtoupper(text($_POST['utr'] ?? '',40,'bank reference',0));
+        if ($utr !== '' && !preg_match('/^[A-Z0-9-]{6,40}$/D',$utr)) throw new ApiError(422,'Check the transaction reference.');
+        $file = $_FILES['proof'] ?? null;
+        $proof = null;
+        if ($file && $file['error'] !== UPLOAD_ERR_NO_FILE) {
+            if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > 3*1024*1024 || !is_uploaded_file($file['tmp_name'])) throw new ApiError(422,'Upload a screenshot up to 3 MB.');
+            $info = @getimagesize($file['tmp_name']);
+            $extension = [IMAGETYPE_JPEG=>'jpg',IMAGETYPE_PNG=>'png',IMAGETYPE_WEBP=>'webp'][$info[2] ?? 0] ?? null;
+            if (!$extension || $info[0]*$info[1] > 12000000) throw new ApiError(422,'Use a JPG, PNG or WebP screenshot.');
+            $proof = ['id'=>uid(),'extension'=>$extension];
+        }
+        if ($utr === '' && !$proof) throw new ApiError(422,'Enter a bank reference or add a screenshot.');
+        $directory = distributorReceiptDirectory();
+        $saved = $proof ? $directory.'/'.$proof['id'] : null;
+        if ($saved && ((!is_dir($directory) && !mkdir($directory,0700,true) && !is_dir($directory)) || !move_uploaded_file($file['tmp_name'],$saved))) throw new ApiError(503,'Screenshot storage is unavailable.');
+        try {
+            $old = transaction(function () use ($order,$owner,$utr,$proof) {
+                $row = one('SELECT status,address FROM orders WHERE id=? AND user_id=?'.lockSuffix(),[$order['id'],$owner]);
+                if (!$row || $row['status'] !== 'awaiting_transfer') throw new ApiError(409,'This order is no longer awaiting payment.');
+                $address = json_decode($row['address'],true,32,JSON_THROW_ON_ERROR);
+                $old = $address['distributor']['receipt']['id'] ?? null;
+                if ($utr !== '') $address['distributor']['submitted_utr'] = $utr;
+                if ($proof) $address['distributor']['receipt'] = $proof;
+                query('UPDATE orders SET address=? WHERE id=?',[json_encode($address,JSON_THROW_ON_ERROR),$order['id']]);
+                return $old;
+            });
+        } catch (Throwable $error) {
+            if ($saved) unlink($saved);
+            throw $error;
+        }
+        if ($proof && $old && preg_match('/^[a-f0-9]{32}$/D',$old) && is_file($directory.'/'.$old)) unlink($directory.'/'.$old);
+        distributorReply(['order'=>getOrder($order['id'],$owner)]);
     }
-    if ($method === 'POST' && $action === '/payment/verify') {
+    if ($method === 'POST' && $action === '/payment/verify' && !isset($order['address']['distributor']['bank'])) {
         throttle('distributor-verify', 40, 3600);
         $provider = gateway();
         if (!$provider instanceof RazorpayGateway) throw new ApiError(503, 'Payment verification is unavailable.');

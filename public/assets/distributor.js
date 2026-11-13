@@ -5,11 +5,11 @@
   const money = paise => YuganthAPI.money(paise);
   async function request(route, body, key) {
     const headers = {Accept: 'application/json'};
-    if (body !== undefined) Object.assign(headers, {'Content-Type': 'application/json', 'X-CSRF-Token': csrf});
+    if (body !== undefined) Object.assign(headers, {...(body instanceof FormData ? {} : {'Content-Type': 'application/json'}), 'X-CSRF-Token': csrf});
     if (key) headers['Idempotency-Key'] = key;
     const response = await fetch('api/distributor.php?route=' + encodeURIComponent(route), {
       method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', headers,
-      ...(body === undefined ? {} : {body: JSON.stringify(body)})
+      ...(body === undefined ? {} : {body: body instanceof FormData ? body : JSON.stringify(body)})
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'The request could not be completed.');
@@ -47,7 +47,7 @@
     const form = $('#bulkForm'), lines = $('#bulkLines'), message = $('#message');
     const {products} = await request('/catalog');
     const catalog = new Map(products.map(product => [product.id, product]));
-    const payment = $('#bulkPayment'), pay = $('#bulkPay');
+    const payment = $('#bulkPayment'), proof = $('#bulkProof');
     const referenceKey = 'yuganth-distributor-order';
     let order, checkoutKey;
     function totals() {
@@ -79,25 +79,33 @@
       sessionStorage.setItem(referenceKey, value.id);
       form.hidden = true; payment.hidden = false;
       $('#bulkReceipt').replaceChildren(); describe(value, $('#bulkReceipt'));
-      const payable = value.status === 'pending_payment' && Number(value.expires_at) * 1000 > Date.now();
-      pay.hidden = !payable;
-      $('#bulkNew').hidden = payable;
-      message.textContent = payable ? 'Review your order and total before paying.' :
-        (['processing','shipped','delivered'].includes(value.status) ? 'Payment verified. Yuganth will review the phone quote and contact you to arrange delivery.' : 'This order is no longer payable. If you were charged, contact Yuganth with the reference above.');
+      const details = value.address.distributor;
+      const awaiting = value.status === 'awaiting_transfer';
+      proof.hidden = !awaiting;
+      $('#bulkNew').hidden = false;
+      if (awaiting && details.bank) {
+        const bank = details.bank;
+        node('h3','Bank transfer details',$('#bulkReceipt'));
+        node('p',`${bank.holder} · ${bank.bank}`,$('#bulkReceipt'));
+        node('p',`Account: ${bank.account} · IFSC: ${bank.ifsc}`,$('#bulkReceipt'));
+        if (details.submitted_utr) node('p',`Submitted reference: ${details.submitted_utr}`,$('#bulkReceipt'));
+        if (details.receipt) node('p','Screenshot received.',$('#bulkReceipt'));
+        const link = node('a','Share proof on WhatsApp',$('#bulkReceipt'));
+        link.href = 'https://wa.me/919618423344?text=' + encodeURIComponent('Transfer proof for Yuganth bulk order ' + value.id);
+      }
+      message.textContent = awaiting ? 'Awaiting bank payment verification.' :
+        (['processing','shipped','delivered'].includes(value.status) ? 'Payment verified.' : 'Contact Yuganth with this reference to check the order.');
     }
-    pay.onclick = async () => {
-      pay.disabled = true;
+    proof.onsubmit = async event => {
+      event.preventDefault();
+      const button = proof.querySelector('button');
+      button.disabled = true;
       try {
-        const {checkout: details} = await request(`/orders/${order.id}/payment`, {});
-        const verified = await YuganthPayment.open(details, {orderId: order.id, request});
-        showOrder(verified.order);
-      } catch (error) {
-        message.textContent = error.message;
-        try {
-          const latest = await request(`/orders/${order.id}`);
-          if (latest.order.status !== order.status) showOrder(latest.order);
-        } catch { /* Keep the payment reference and original error visible. */ }
-      } finally { pay.disabled = false; }
+        showOrder((await request(`/orders/${order.id}/receipt`,new FormData(proof))).order);
+        proof.reset();
+        message.textContent = 'Transfer details received. Yuganth will check the bank credit.';
+      } catch (error) { message.textContent = error.message; }
+      finally { button.disabled = false; }
     };
     $('#bulkNew').onclick = () => { sessionStorage.removeItem(referenceKey); location.reload(); };
     $('#addBulkLine').onclick = addLine;
@@ -126,6 +134,23 @@
 
   async function admin() {
     const status = $('#bulkAdminStatus'), productsBox = $('#bulkAdminProducts');
+    const bankForm = $('#distributorBank');
+    if (bankForm) {
+      const {bank} = await request('/admin/bank');
+      bankForm.hidden = false;
+      for (const key of ['holder','bank','account','ifsc']) bankForm.elements[key].value = bank?.[key] ?? '';
+      bankForm.onsubmit = async event => {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(bankForm));
+        const save = bankForm.querySelector('button'); save.disabled = true;
+        try {
+          await request('/admin/bank',{...data,publish:bankForm.elements.publish.checked});
+          bankForm.elements.publish.checked = false;
+          status.textContent = 'Distributor bank details saved.';
+        } catch (error) { status.textContent = error.message; }
+        finally { save.disabled = false; }
+      };
+    }
     const {products} = await request('/admin/products');
     productsBox.replaceChildren();
     for (const product of products) {
@@ -148,7 +173,7 @@
     const status = $('#bulkAdminStatus'), type = $('#orderType'), filter = $('#orderStatus');
     const search = $('#orderSearch'), holder = $('#bulkAdminOrders'), reload = $('#reloadOrders');
     const dispatch = $('#normalDispatch');
-    const labels = {pending_payment:'Pending payment', processing:'Paid', shipped:'Shipped', delivered:'Delivered', cancelled:'Cancelled', expired:'Expired'};
+    const labels = {awaiting_transfer:'Awaiting bank transfer', pending_payment:'Pending payment', processing:'Paid', shipped:'Shipped', delivered:'Delivered', cancelled:'Cancelled', expired:'Expired'};
     let orders = [], shipments = new Map(), shippingEnabled = false, loadVersion = 0;
 
     function actionForm(card, label, action) {
@@ -207,6 +232,22 @@
           const a = order.address || {};
           node('p',[a.name,a.phone,a.line1,a.line2,a.city,a.state,a.pincode].filter(Boolean).join(' · '),card);
         }
+        if (bulk && details?.verified_utr) node('p',`Verified bank reference: ${details.verified_utr}`,card);
+        if (bulk && details?.receipt) {
+          const link = node('a','Download transfer screenshot',card);
+          link.href = 'api/distributor.php?route=' + encodeURIComponent('/admin/receipt/' + order.id);
+        }
+        if (bulk && order.status === 'awaiting_transfer') {
+          if (details.submitted_utr) node('p',`Submitted bank reference: ${details.submitted_utr}`,card);
+          const {form,button} = actionForm(card,'Verify bank credit',async () => {
+            await request('/admin/verify-transfer',{id:order.id,amount:form.elements.amount.value,utr:form.elements.utr.value});
+            return 'Bank payment verified. Check the phone quote before accepting this order.';
+          });
+          field(form,'Actual credited amount (₹)',input('text','amount','','')).inputMode = 'decimal';
+          field(form,'Bank transaction reference',input('text','utr','','')).value = details.submitted_utr ?? '';
+          form.append(button);
+          continue;
+        }
         if (bulk && order.status === 'processing' && !reviewed) {
           const {form,button} = actionForm(card,'Accept bulk order',async () => {
             await request('/admin/reconcile',{id:order.id,agreed:form.elements.quote.value});
@@ -256,7 +297,7 @@
     if (!adminSession.csrf) throw new Error('Refresh your admin session.');
     function switchType() {
       const bulk = type.value === 'bulk';
-      for (const option of filter.options) if (['review','accepted'].includes(option.value)) option.hidden = !bulk;
+      for (const option of filter.options) if (['review','accepted','awaiting_transfer'].includes(option.value)) option.hidden = !bulk;
       filter.value = ''; orders = []; load();
     }
     type.value = new URLSearchParams(location.search).get('type') === 'bulk' ? 'bulk' : 'normal';
