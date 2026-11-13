@@ -78,23 +78,46 @@
       order = value;
       sessionStorage.setItem(referenceKey, value.id);
       form.hidden = true; payment.hidden = false;
-      $('#bulkReceipt').replaceChildren(); describe(value, $('#bulkReceipt'));
+      const receipt = $('#bulkReceipt');
+      receipt.replaceChildren();
       const details = value.address.distributor;
       const awaiting = value.status === 'awaiting_transfer';
       proof.hidden = !awaiting;
       $('#bulkNew').hidden = false;
+      const card = (title, style = '') => {
+        const section = node('section', undefined, receipt);
+        section.className = 'receipt-card ' + style;
+        node('h3', title, section);
+        return section;
+      };
+      const fields = (section, entries) => {
+        const list = node('dl', undefined, section);
+        list.className = 'receipt-grid';
+        for (const [label, text] of entries) {
+          if (!text) continue;
+          const row = node('div', undefined, list);
+          node('dt', label, row);
+          node('dd', text, row);
+        }
+      };
+      const total = card(awaiting ? 'Amount to transfer' : 'Order total','receipt-top');
+      node('p',money(value.total_paise),total).className = 'receipt-total';
+      fields(total,[['Agreed amount',money(value.subtotal_paise)],['GST (' + details.gst_bps / 100 + '%)',money(details.gst_paise)],['Order reference',value.id]]);
       if (awaiting && details.bank) {
         const bank = details.bank;
-        node('h3','Bank transfer details',$('#bulkReceipt'));
-        node('p',`${bank.holder} · ${bank.bank}`,$('#bulkReceipt'));
-        node('p',`Account: ${bank.account} · IFSC: ${bank.ifsc}`,$('#bulkReceipt'));
-        if (bank.branch) node('p','Branch: ' + bank.branch,$('#bulkReceipt'));
-        if (bank.upi) node('p','UPI ID: ' + bank.upi,$('#bulkReceipt'));
-        if (details.submitted_utr) node('p',`Submitted reference: ${details.submitted_utr}`,$('#bulkReceipt'));
-        if (details.receipt) node('p','Screenshot received.',$('#bulkReceipt'));
-        const link = node('a','Share proof on WhatsApp',$('#bulkReceipt'));
+        const section = card('Bank transfer or UPI');
+        fields(section,[['Beneficiary',bank.holder],['Bank',bank.bank],['Account number',bank.account],['IFSC',bank.ifsc],['Branch',bank.branch],['UPI ID',bank.upi]]);
+        if (details.submitted_utr) node('p','Submitted reference: ' + details.submitted_utr,section);
+        if (details.receipt) node('p','Screenshot received.',section);
+        const link = node('a','Share proof on WhatsApp',section);
         link.href = 'https://wa.me/919618423344?text=' + encodeURIComponent('Transfer proof for Yuganth bulk order ' + value.id);
       }
+      const summary = card('Order summary');
+      for (const item of details.lines) node('p',item.name + ' · ' + packing(item.pack) + ' · ' + item.grams + ' g × ' + item.quantity,summary).className = 'receipt-item';
+      const delivery = node('details',undefined,summary);
+      node('summary','Business and delivery details',delivery);
+      const address = value.address;
+      fields(delivery,[['Business',details.company],['Recipient',address.name],['Phone',address.phone],['Email',details.email],['Delivery address',[address.line1,address.line2,address.city,address.state,address.pincode,'India'].filter(Boolean).join(', ')],['GSTIN',details.gstin]]);
       message.textContent = awaiting ? 'Awaiting bank payment verification.' :
         (['processing','shipped','delivered'].includes(value.status) ? 'Payment verified.' : 'Contact Yuganth with this reference to check the order.');
     }
@@ -109,11 +132,39 @@
       } catch (error) { message.textContent = error.message; }
       finally { button.disabled = false; }
     };
+    $('#bulkBack').onclick = () => {
+      if (!lines.children.length) {
+        const saved = order.address.distributor;
+        for (const item of saved.lines) {
+          addLine();
+          const line = lines.lastElementChild;
+          for (const [name,value] of Object.entries({product:item.id,pack:item.pack,grams:item.grams,quantity:item.quantity})) {
+            const control = line.querySelector('[name=' + name + ']');
+            if (name === 'product' && !catalog.has(value)) control.add(new Option(item.name,value));
+            control.value = value;
+          }
+        }
+        for (const [key,value] of Object.entries({...order.address,company:saved.company,email:saved.email,gstin:saved.gstin,agreed:(Number(order.subtotal_paise)/100).toFixed(2)})) {
+          if (form.elements.namedItem(key)) form.elements.namedItem(key).value = value;
+        }
+        totals();
+      }
+      for (const element of form.elements) if (element.id !== 'bulkReturn') element.disabled = true;
+      payment.hidden = true;
+      form.hidden = false;
+      form.querySelector('[type=submit]').hidden = true;
+      $('#bulkReturn').hidden = false;
+      message.textContent = 'Your order is saved. Return to payment details to continue.';
+      $('#distributorCheckout').scrollIntoView();
+      $('#bulkReturn').focus({preventScroll:true});
+    };
+    $('#bulkReturn').onclick = () => { showOrder(order); $('#bulkBack').focus(); };
     $('#bulkNew').onclick = () => { sessionStorage.removeItem(referenceKey); location.reload(); };
     $('#addBulkLine').onclick = addLine;
     form.addEventListener('input', totals);
     form.onsubmit = async event => {
       event.preventDefault();
+      if (order) { showOrder(order); return; }
       const data = Object.fromEntries(new FormData(form));
       const items = [...lines.children].map(line => ({id: line.querySelector('[name=product]').value, pack: line.querySelector('[name=pack]').value, grams: Number(line.querySelector('[name=grams]').value), quantity: Number(line.querySelector('[name=quantity]').value)}));
       const address = Object.fromEntries(['name','phone','line1','line2','city','state','pincode'].map(key => [key,data[key]]));

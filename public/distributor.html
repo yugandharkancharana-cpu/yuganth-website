@@ -2,8 +2,21 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Distributor orders · Yuganth</title><link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/commerce.css"><link rel="stylesheet" href="assets/distributor.css">
-<script defer src="assets/api.js"></script><script defer src="assets/distributor.js?v=transfer-2"></script>
-</head><body class="commerce-page"><header class="commerce-header"><a class="commerce-brand" href="index.html">YUGANTH</a><a href="index.html#range">The pantry</a></header>
+<script defer src="assets/api.js"></script><script defer src="assets/distributor.js?v=transfer-3"></script>
+<style>
+#bulkPayment{padding:0;border:0}
+#bulkPayment h2,#bulkPayment h3{margin:0 0 .65rem}
+.receipt-card{background:#fffdf6;border:1px solid #ded8c9;border-radius:12px;padding:clamp(16px,3vw,28px);margin-bottom:16px;overflow-wrap:anywhere}
+.receipt-top{background:#12392d;color:#fff9e9}
+.receipt-total{font-size:clamp(1.75rem,5vw,2.6rem);font-weight:700;line-height:1.2;margin:.3rem 0 1rem}
+.receipt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0}
+.receipt-grid dt{font-size:.85rem;font-weight:600;opacity:.8}
+.receipt-grid dd{margin:0}
+.receipt-item{margin:.5rem 0}
+.receipt-actions{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 18px}
+.receipt-actions button{margin:0}
+@media(max-width:520px){.receipt-grid{grid-template-columns:1fr}}
+</style></head><body class="commerce-page"><header class="commerce-header"><a class="commerce-brand" href="index.html">YUGANTH</a><a href="index.html#range">The pantry</a></header>
 <main class="commerce-main" id="distributorCheckout">
 <h1>Distributor orders</h1><p>Agree on the products, packing and price with Yuganth by phone before ordering. <a href="tel:+919618423344">Call +91 96184 23344</a>.</p>
 <p id="message" class="commerce-message" role="status" aria-live="polite"></p>
@@ -25,7 +38,7 @@
 <label for="bulkPrice">Total agreed by phone before GST (₹)</label><input id="bulkPrice" name="agreed" inputmode="decimal" pattern="[0-9]{1,7}(\.[0-9]{1,2})?" placeholder="10000.00" required>
 <p id="bulkTotals" aria-live="polite"></p><p>Yuganth will contact you to arrange delivery separately. This payment excludes delivery charges.</p>
 <label class="bulk-check"><input type="checkbox" name="accepted" required> <span>I confirm the price and order details agreed by phone and accept the <a href="terms-and-conditions.html" target="_blank" rel="noopener">Terms &amp; Conditions</a>. See our <a href="privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
-<button type="submit">Submit order</button></section>
+<button type="submit">Submit order</button><button id="bulkReturn" type="button" hidden>Return to saved payment details</button></section>
 </form>
-<section class="commerce-panel" id="bulkPayment" hidden><h2>Distributor payment</h2><div id="bulkReceipt"></div><form id="bulkProof" hidden enctype="multipart/form-data"><label>Bank transaction reference (optional)<input name="utr" maxlength="40"></label><label>Transfer screenshot (optional, up to 3 MB)<input name="proof" type="file" accept="image/png,image/jpeg,image/webp"></label><button>Send transfer details</button></form><button id="bulkNew" type="button" hidden>Start another order</button></section>
+<section class="commerce-panel" id="bulkPayment" hidden><div class="receipt-actions"><button id="bulkBack" type="button">← Back to order form</button></div><div id="bulkReceipt"></div><form class="receipt-card" id="bulkProof" hidden enctype="multipart/form-data"><h3>Share payment proof</h3><p>Enter a transaction reference or attach a screenshot. You can also send proof on WhatsApp.</p><label>Bank transaction reference (optional)<input name="utr" maxlength="40"></label><label>Transfer screenshot (optional, up to 3 MB)<input name="proof" type="file" accept="image/png,image/jpeg,image/webp"></label><button>Send transfer details</button></form><button id="bulkNew" type="button" hidden>Start another order</button></section>
 </main></body></html>
