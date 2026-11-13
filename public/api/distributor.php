@@ -82,6 +82,9 @@ try {
         if ($route === '/admin/bank' && $method === 'POST') {
             $bank = [];
             foreach (['holder'=>120,'bank'=>120,'account'=>24,'ifsc'=>11] as $key=>$limit) $bank[$key] = text($input[$key] ?? null,$limit,$key);
+            $bank['branch'] = text($input['branch'] ?? '',120,'branch',0);
+            $bank['upi'] = text($input['upi'] ?? '',120,'UPI ID',0);
+            if ($bank['upi'] !== '' && !preg_match('/^[A-Za-z0-9._-]+@[A-Za-z0-9]+$/D',$bank['upi'])) throw new ApiError(422,'Check the UPI ID.');
             $bank['ifsc'] = strtoupper($bank['ifsc']);
             if (!preg_match('/^[0-9]{6,24}$/D',$bank['account']) || !preg_match('/^[A-Z]{4}0[A-Z0-9]{6}$/D',$bank['ifsc'])) throw new ApiError(422,'Check the account number and IFSC.');
             if (($input['publish'] ?? null) !== true) throw new ApiError(422,'Confirm these details may be shared with distributors.');

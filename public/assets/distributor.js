@@ -88,6 +88,8 @@
         node('h3','Bank transfer details',$('#bulkReceipt'));
         node('p',`${bank.holder} · ${bank.bank}`,$('#bulkReceipt'));
         node('p',`Account: ${bank.account} · IFSC: ${bank.ifsc}`,$('#bulkReceipt'));
+        if (bank.branch) node('p','Branch: ' + bank.branch,$('#bulkReceipt'));
+        if (bank.upi) node('p','UPI ID: ' + bank.upi,$('#bulkReceipt'));
         if (details.submitted_utr) node('p',`Submitted reference: ${details.submitted_utr}`,$('#bulkReceipt'));
         if (details.receipt) node('p','Screenshot received.',$('#bulkReceipt'));
         const link = node('a','Share proof on WhatsApp',$('#bulkReceipt'));
@@ -138,7 +140,7 @@
     if (bankForm) {
       const {bank} = await request('/admin/bank');
       bankForm.hidden = false;
-      for (const key of ['holder','bank','account','ifsc']) bankForm.elements[key].value = bank?.[key] ?? '';
+      for (const key of ['holder','bank','account','ifsc','branch','upi']) bankForm.elements[key].value = bank?.[key] ?? '';
       bankForm.onsubmit = async event => {
         event.preventDefault();
         const data = Object.fromEntries(new FormData(bankForm));
